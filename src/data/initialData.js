@@ -5,8 +5,8 @@ export const INITIAL_MOVIES = [
   {
     id: 'MOV-101',
     title: 'Dune: Part Two',
-    genre: 'Sci-Fi • Adventure • Action',
-    language: 'English, Hindi • IMAX 2D, 3D',
+    genre: 'Sci-Fi â€¢ Adventure â€¢ Action',
+    language: 'English, Hindi â€¢ IMAX 2D, 3D',
     durationMinutes: 166,
     certificate: 'UA 13+',
     ratingScore: 8.8,
@@ -21,8 +21,8 @@ export const INITIAL_MOVIES = [
   {
     id: 'MOV-102',
     title: 'Oppenheimer',
-    genre: 'Biography • Drama • History',
-    language: 'English • 70mm Special Screening',
+    genre: 'Biography â€¢ Drama â€¢ History',
+    language: 'English â€¢ 70mm Special Screening',
     durationMinutes: 180,
     certificate: 'A (18+)',
     ratingScore: 8.9,
@@ -37,8 +37,8 @@ export const INITIAL_MOVIES = [
   {
     id: 'MOV-103',
     title: 'Past Lives',
-    genre: 'Romance • Drama',
-    language: 'Korean, English • 2D Subtitled',
+    genre: 'Romance â€¢ Drama',
+    language: 'Korean, English â€¢ 2D Subtitled',
     durationMinutes: 106,
     certificate: 'UA 13+',
     ratingScore: 7.9,
@@ -52,9 +52,9 @@ export const INITIAL_MOVIES = [
   },
   {
     id: 'MOV-104',
-    title: 'Mission: Impossible — Dead Reckoning',
-    genre: 'Action • Thriller • Spy',
-    language: 'English, Hindi • 4DX, 2D',
+    title: 'Mission: Impossible â€” Dead Reckoning',
+    genre: 'Action â€¢ Thriller â€¢ Spy',
+    language: 'English, Hindi â€¢ 4DX, 2D',
     durationMinutes: 163,
     certificate: 'UA 13+',
     ratingScore: 7.7,
@@ -69,8 +69,8 @@ export const INITIAL_MOVIES = [
   {
     id: 'MOV-105',
     title: 'Spider-Man: Across the Spider-Verse',
-    genre: 'Animation • Action • Adventure',
-    language: 'English, Hindi, Telugu • 3D',
+    genre: 'Animation â€¢ Action â€¢ Adventure',
+    language: 'English, Hindi, Telugu â€¢ 3D',
     durationMinutes: 140,
     certificate: 'U (Universal)',
     ratingScore: 8.6,
@@ -278,7 +278,7 @@ export const INITIAL_SHOWS = [
     movieId: 'MOV-101',
     state: 'Delhi NCR',
     city: 'New Delhi',
-    theatre: 'PVR Director’s Cut: Ambience Vasant Kunj',
+    theatre: 'PVR Directorâ€™s Cut: Ambience Vasant Kunj',
     theatreLocation: 'Ambience Mall, Nelson Mandela Marg',
     screen: 'Auditorium 1 (Platinum Suite)',
     date: '2026-08-28',
@@ -326,7 +326,7 @@ export const INITIAL_CASES = [
     selectedSeats: ['G12', 'G13'],
     totalCost: calculateTotalCost(INITIAL_SHOWS[0], 2, 'RECLINER').totalCost,
     status: STATUSES.NEW,
-    stage: STAGES.INTAKE,
+    stage: STAGES.INITIAL,
     queue: QUEUES.PREMIUM,
     createdAt: new Date(NOW - 0.6 * H).toISOString(),
     slaGoalAt: new Date(NOW - 0.6 * H + 24 * H).toISOString(),
@@ -336,7 +336,7 @@ export const INITIAL_CASES = [
     resolvedAt: null,
     stageHistory: [
       {
-        stage: STAGES.INTAKE,
+        stage: STAGES.INITIAL,
         action: 'Case Created',
         actor: 'Elena Vance (Customer)',
         timestamp: new Date(NOW - 0.6 * H).toISOString(),
@@ -366,7 +366,7 @@ export const INITIAL_CASES = [
     resolvedAt: null,
     stageHistory: [
       {
-        stage: STAGES.INTAKE,
+        stage: STAGES.INITIAL,
         action: 'Case Created',
         actor: 'Marcus Holloway (Customer)',
         timestamp: new Date(NOW - 2.5 * H).toISOString(),
@@ -403,7 +403,7 @@ export const INITIAL_CASES = [
     resolvedAt: null,
     stageHistory: [
       {
-        stage: STAGES.INTAKE,
+        stage: STAGES.INITIAL,
         action: 'Case Created',
         actor: 'Priya Sharma (Customer)',
         timestamp: new Date(NOW - 8.0 * H).toISOString(),
@@ -440,7 +440,7 @@ export const INITIAL_CASES = [
     resolvedAt: null,
     stageHistory: [
       {
-        stage: STAGES.INTAKE,
+        stage: STAGES.INITIAL,
         action: 'Case Created',
         actor: 'Jonathan Chen (Customer)',
         timestamp: new Date(NOW - 19.5 * H).toISOString(),
@@ -451,7 +451,7 @@ export const INITIAL_CASES = [
         action: 'Availability Verified',
         actor: 'Staff Agent (R. Vance)',
         timestamp: new Date(NOW - 18.0 * H).toISOString(),
-        notes: 'Verified seat availability (6 seats remain). Total cost confirmed at ₹1,470.80. Advanced to Stage 3 Approval.',
+        notes: 'Verified seat availability (6 seats remain). Total cost confirmed at â‚¹1,470.80. Advanced to Stage 3 Approval.',
       },
       {
         stage: STAGES.APPROVAL,
@@ -484,7 +484,7 @@ export const INITIAL_CASES = [
     resolvedAt: null,
     stageHistory: [
       {
-        stage: STAGES.INTAKE,
+        stage: STAGES.INITIAL,
         action: 'Case Created',
         actor: 'Samantha Reed (Customer)',
         timestamp: new Date(NOW - 28.0 * H).toISOString(),
@@ -528,7 +528,7 @@ export const INITIAL_CASES = [
     resolvedAt: null,
     stageHistory: [
       {
-        stage: STAGES.INTAKE,
+        stage: STAGES.INITIAL,
         action: 'Case Created',
         actor: 'Arthur Pendelton (Customer)',
         timestamp: new Date(NOW - 51.0 * H).toISOString(),
@@ -572,7 +572,7 @@ export const INITIAL_CASES = [
     resolvedAt: new Date(NOW - 29.5 * H).toISOString(),
     stageHistory: [
       {
-        stage: STAGES.INTAKE,
+        stage: STAGES.INITIAL,
         action: 'Case Created',
         actor: 'David Miller (Customer)',
         timestamp: new Date(NOW - 32.0 * H).toISOString(),
@@ -583,7 +583,7 @@ export const INITIAL_CASES = [
         action: 'Capacity Checked',
         actor: 'System Automated Check',
         timestamp: new Date(NOW - 31.8 * H).toISOString(),
-        notes: 'Seats available. Total cost calculated: ₹1,590.80.',
+        notes: 'Seats available. Total cost calculated: â‚¹1,590.80.',
       },
       {
         stage: STAGES.APPROVAL,
@@ -607,7 +607,7 @@ export const INITIAL_CASES = [
         recipientName: 'David Miller',
         recipientPhone: '+91 99001 88776',
         subject: 'Confirmed: Your CineWave Booking Reference CW-TKT-849201 for Dune: Part Two',
-        body: `DEAR DAVID MILLER,\n\nYOUR CINEMA BOOKING HAS BEEN FORMALLY CONFIRMED AND RESERVED.\n\nTICKET REF: CW-TKT-849201\nMOVIE: Dune: Part Two (IMAX Laser 3D)\nLOCATION: Hyderabad, Telangana\nTHEATRE: Prasads Multiplex IMAX - Screen 6\nDATE & TIME: 2026-08-28, 19:30\nSEATS: D10, D11 (VIP Recliner Suite)\nTOTAL PAID: ₹1,590.80\n\nEntry barcode active at theater kiosk.`,
+        body: `DEAR DAVID MILLER,\n\nYOUR CINEMA BOOKING HAS BEEN FORMALLY CONFIRMED AND RESERVED.\n\nTICKET REF: CW-TKT-849201\nMOVIE: Dune: Part Two (IMAX Laser 3D)\nLOCATION: Hyderabad, Telangana\nTHEATRE: Prasads Multiplex IMAX - Screen 6\nDATE & TIME: 2026-08-28, 19:30\nSEATS: D10, D11 (VIP Recliner Suite)\nTOTAL PAID: â‚¹1,590.80\n\nEntry barcode active at theater kiosk.`,
         type: 'EMAIL_CONFIRMATION',
         timestamp: new Date(NOW - 29.5 * H).toISOString(),
         deliveryStatus: 'Delivered (Simulated Dispatch)',
@@ -636,7 +636,7 @@ export const INITIAL_CASES = [
     resolvedAt: new Date(NOW - 42.0 * H).toISOString(),
     stageHistory: [
       {
-        stage: STAGES.INTAKE,
+        stage: STAGES.INITIAL,
         action: 'Case Created',
         actor: 'Chloe Bennett (Customer)',
         timestamp: new Date(NOW - 44.0 * H).toISOString(),

@@ -1,14 +1,14 @@
 // CineWave Domain Types and Constants
 
 export const STAGES = {
-  INTAKE: 'Stage 1 — Intake',
-  AVAILABILITY: 'Stage 2 — Availability',
-  APPROVAL: 'Stage 3 — Approval',
-  EXECUTION: 'Stage 4 — Booking Execution',
+  INITIAL: 'Initial Stage',
+  AVAILABILITY: 'Availability',
+  APPROVAL: 'Approval',
+  EXECUTION: 'Booking Execution',
 };
 
 export const STAGE_KEYS = {
-  INTAKE: 'INTAKE',
+  INITIAL: 'INITIAL',
   AVAILABILITY: 'AVAILABILITY',
   APPROVAL: 'APPROVAL',
   EXECUTION: 'EXECUTION',
@@ -32,6 +32,15 @@ export const SHOW_TYPES = {
   PREMIUM: 'Premium',
   STANDARD: 'Standard',
 };
+
+// Queue Routing Helper based on Format and Type
+export function determineShowQueue(format, showType) {
+  const premiumKeywords = /IMAX|4DX|Dolby|70mm|Luxe|VIP|Laser|ScreenX/i;
+  if (showType === SHOW_TYPES.PREMIUM || (format && premiumKeywords.test(format))) {
+    return QUEUES.PREMIUM;
+  }
+  return QUEUES.STANDARD;
+}
 
 // Indian Multiplex Seating Categories & INR Tier Multipliers
 export const SEAT_CATEGORIES = {

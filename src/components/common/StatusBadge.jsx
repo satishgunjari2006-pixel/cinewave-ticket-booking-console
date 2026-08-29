@@ -26,6 +26,10 @@ export function StatusBadge({ status, size = 'md' }) {
       badgeClass = 'status-badge-cancelled';
       dotClass = 'bg-zinc-400';
       break;
+    case STATUSES.RESOLVED_REFUNDED:
+      badgeClass = 'status-badge-cancelled';
+      dotClass = 'bg-purple-400';
+      break;
     default:
       badgeClass = 'status-badge-neutral';
       dotClass = 'bg-slate-400';
@@ -41,7 +45,7 @@ export function StatusBadge({ status, size = 'md' }) {
 
 export function StageBadge({ stage, current = false }) {
   let stageNumber = '1';
-  let shortName = 'Intake';
+  let shortName = 'Initial Stage';
 
   if (stage?.includes('Availability') || stage === 'AVAILABILITY') {
     stageNumber = '2';
@@ -49,9 +53,9 @@ export function StageBadge({ stage, current = false }) {
   } else if (stage?.includes('Approval') || stage === 'APPROVAL') {
     stageNumber = '3';
     shortName = 'Approval';
-  } else if (stage?.includes('Execution') || stage === 'EXECUTION') {
+  } else if (stage?.includes('Execution') || stage?.includes('Booking Execution') || stage === 'EXECUTION') {
     stageNumber = '4';
-    shortName = 'Execution';
+    shortName = 'Booking Execution';
   }
 
   return (
@@ -65,7 +69,7 @@ export function StageBadge({ stage, current = false }) {
 export function QueueBadge({ queue }) {
   const isPremium = queue?.includes('Premium');
   return (
-    <span className={`queue-badge ${isPremium ? 'queue-premium' : 'queue-standard'}`}>
+    <span className={`queue-badge ${isPremium ? 'queue-premium' : 'queue-standard'}`} title={isPremium ? 'Routed to Premium ShowQueue (IMAX / 4DX / Dolby / Luxe)' : 'Routed to Standard ShowQueue'}>
       <span className="queue-indicator" />
       {queue || 'Standard ShowQueue'}
     </span>

@@ -3,7 +3,8 @@ import { useCaseContext } from '../../context/CaseContext';
 import { StatusBadge, StageBadge, QueueBadge } from '../common/StatusBadge';
 import { SLABadge } from '../common/SLABadge';
 import { STAGES, STATUSES, QUEUES, SEAT_CATEGORIES } from '../../data/types';
-import { IconFilmReel, IconSeat, IconTicketStub, IconAudit, IconMail, IconSLAClock } from '../common/Icons';
+import { formatINR } from '../../utils/costCalculator';
+import { IconFilmReel, IconSeat, IconTicketStub, IconAudit, IconMail, IconSLAClock, IconAlertCircle } from '../common/Icons';
 import { TicketStubModal } from '../customer/TicketStubModal';
 
 export function CaseDetail() {
@@ -14,7 +15,6 @@ export function CaseDetail() {
     runAvailabilityCheck, 
     confirmBooking, 
     cancelBooking,
-    reassignShow,
     reassignQueue,
     setActiveRole,
     setCustomerActiveCaseId,
@@ -22,7 +22,6 @@ export function CaseDetail() {
 
   const [selectedCorrModal, setSelectedCorrModal] = useState(null);
   const [showTicketModal, setShowTicketModal] = useState(false);
-  const [altShowModal, setAltShowModal] = useState(false);
 
   if (!selectedCase) {
     return (
@@ -35,13 +34,18 @@ export function CaseDetail() {
   const { movie, show } = getCaseEntities(selectedCase);
   const categoryConfig = SEAT_CATEGORIES[selectedCase.seatCategory] || SEAT_CATEGORIES.STANDARD;
 
-  // Determine stage progression index (0: Intake, 1: Availability, 2: Approval, 3: Execution)
+  // Determine stage progression index (0: Initial Stage, 1: Availability, 2: Approval, 3: Booking Execution)
   let currentStageIdx = 0;
-  if (selectedCase.stage?.includes('Availability') || selectedCase.stage === 'AVAILABILITY') currentStageIdx = 1;
-  if (selectedCase.stage?.includes('Approval') || selectedCase.stage === 'APPROVAL') currentStageIdx = 2;
-  if (selectedCase.stage?.includes('Execution') || selectedCase.stage === 'EXECUTION' || selectedCase.status === STATUSES.RESOLVED_CONFIRMED) currentStageIdx = 3;
+  if (selectedCase.stage === STAGES.AVAILABILITY || selectedCase.stage?.includes('Availability')) currentStageIdx = 1;
+  if (selectedCase.stage === STAGES.APPROVAL || selectedCase.stage?.includes('Approval')) currentStageIdx = 2;
+  if (selectedCase.stage === STAGES.EXECUTION || selectedCase.stage?.includes('Execution') || selectedCase.status === STATUSES.RESOLVED_CONFIRMED) currentStageIdx = 3;
 
-  const isResolved = selectedCase.status === STATUSES.RESOLVED_CONFIRMED || selectedCase.status === STATUSES.RESOLVED_CANCELLED;
+  const isResolved = selectedCase.status === STATUSES.RESOLVED_CONFIRMED || selectedCase.status === STATUSES.RESOLVED_CANCELLED || selectedCase.status === STATUSES.RESOLVED_REFUNDED;
+
+  const handleOpenCustomerCheckpoint = () => {
+    setCustomerActiveCaseId(selectedCase.caseId);
+    setActiveRole('customer');
+  };
 
   return (
     <div className="case-inspector-card">
@@ -64,7 +68,7 @@ export function CaseDetail() {
         {/* Queue Switcher if not resolved */}
         {!isResolved && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Route:</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Route Queue:</span>
             <select
               className="filter-select"
               value={selectedCase.queue}
@@ -78,161 +82,131 @@ export function CaseDetail() {
       </div>
 
       {/* 2. Customer Summary Strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', background: 'var(--bg-inset)', padding: '10px 14px', borderRadius: '4px', border: '1px solid var(--border-default)' }}>
-        <div>
-          <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Customer</div>
-          <div style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '13px' }}>{selectedCase.customerName}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Email</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-secondary)' }}>{selectedCase.customerEmail}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Phone</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-secondary)' }}>{selectedCase.customerPhone}</div>
-        </div>
+      <div className="customer-strip">
+        <div><strong>Guest:</strong> {selectedCase.customerName}</div>
+        <div><strong>Contact:</strong> {selectedCase.customerEmail} • {selectedCase.customerPhone}</div>
+        <div><strong>Assigned Queue:</strong> <span style={{ color: selectedCase.queue?.includes('Premium') ? '#F59E0B' : '#60A5FA', fontWeight: '600' }}>{selectedCase.queue}</span></div>
       </div>
 
-      {/* 3. SLA Urgency Monitor Banner */}
-      <SLABadge caseItem={selectedCase} simulatedNow={simulatedNow} variant="detailed" />
+      {/* 3. SLA Monitor Block */}
+      <div style={{ margin: '12px 0' }}>
+        <SLABadge caseItem={selectedCase} simulatedNow={simulatedNow} variant="detailed" />
+      </div>
 
-      {/* 4. 4-Stage Lifecycle Stepper */}
+      {/* 4. 4-Stage Lifecycle Stepper (Exact Names) */}
       <div className="stage-tracker-wrapper">
         <div className="stage-tracker-title">Case Lifecycle Stages</div>
         <div className="stage-steps-row">
-          <div className={`stage-step-item ${currentStageIdx >= 0 ? (currentStageIdx > 0 ? 'completed' : 'active') : ''}`}>
-            <div className="stage-step-dot">{currentStageIdx > 0 ? '✓' : '1'}</div>
-            <div className="stage-step-label">1. Intake</div>
+          <div className={`stage-step-item ${currentStageIdx >= 0 ? (currentStageIdx > 0 ? 'stage-step-completed' : 'stage-step-active') : 'stage-step-upcoming'}`}>
+            <div className="stage-step-circle">{currentStageIdx > 0 ? '✓' : '1'}</div>
+            <div className="stage-step-meta">
+              <span className="stage-step-name">Initial Stage</span>
+              <span className="stage-step-desc">Case intake & routing</span>
+            </div>
           </div>
 
-          <div className={`stage-step-item ${currentStageIdx >= 1 ? (currentStageIdx > 1 ? 'completed' : 'active') : ''}`}>
-            <div className="stage-step-dot">{currentStageIdx > 1 ? '✓' : '2'}</div>
-            <div className="stage-step-label">2. Availability</div>
+          <div className={`stage-step-item ${currentStageIdx >= 1 ? (currentStageIdx > 1 ? 'stage-step-completed' : 'stage-step-active') : 'stage-step-upcoming'}`}>
+            <div className="stage-step-circle">{currentStageIdx > 1 ? '✓' : '2'}</div>
+            <div className="stage-step-meta">
+              <span className="stage-step-name">Availability</span>
+              <span className="stage-step-desc">Screen capacity check</span>
+            </div>
           </div>
 
-          <div className={`stage-step-item ${currentStageIdx >= 2 ? (currentStageIdx > 2 ? 'completed' : 'active') : ''}`}>
-            <div className="stage-step-dot">{currentStageIdx > 2 ? '✓' : '3'}</div>
-            <div className="stage-step-label">3. Approval</div>
+          <div className={`stage-step-item ${currentStageIdx >= 2 ? (currentStageIdx > 2 ? 'stage-step-completed' : 'stage-step-active') : 'stage-step-upcoming'}`}>
+            <div className="stage-step-circle">{currentStageIdx > 2 ? '✓' : '3'}</div>
+            <div className="stage-step-meta">
+              <span className="stage-step-name">Approval</span>
+              <span className="stage-step-desc">Customer confirmation</span>
+            </div>
           </div>
 
-          <div className={`stage-step-item ${currentStageIdx >= 3 ? 'active' : ''}`}>
-            <div className="stage-step-dot">{selectedCase.status === STATUSES.RESOLVED_CONFIRMED ? '✓' : '4'}</div>
-            <div className="stage-step-label">4. Execution</div>
+          <div className={`stage-step-item ${currentStageIdx >= 3 ? 'stage-step-completed' : 'stage-step-upcoming'}`}>
+            <div className="stage-step-circle">{selectedCase.status === STATUSES.RESOLVED_CONFIRMED ? '✓' : '4'}</div>
+            <div className="stage-step-meta">
+              <span className="stage-step-name">Booking Execution</span>
+              <span className="stage-step-desc">Seats locked & ticket issued</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 5. Stage Action Workspace (Interactive based on active stage) */}
-      <div className="stage-action-box">
-        {selectedCase.stage?.includes('Intake') && selectedCase.status === STATUSES.NEW && (
+      {/* 5. Stage Action Workspace */}
+      <div className="stage-action-box" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '16px', margin: '14px 0' }}>
+        {selectedCase.stage === STAGES.INITIAL && selectedCase.status === STATUSES.NEW && (
           <>
-            <div className="action-box-header">
-              <div className="action-box-title">
-                <span>Stage 1 Intake — Ready for Capacity Check</span>
-              </div>
-              <span className="tab-badge">Queue: {selectedCase.queue}</span>
+            <div className="action-box-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ fontWeight: '700', color: '#fff', fontSize: '14px' }}>Stage 1: Initial Stage — Ready for Capacity Verification</div>
+              <QueueBadge queue={selectedCase.queue} />
             </div>
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              Booking request intake received for {selectedCase.seatCount} {categoryConfig.label} seat(s). Verify inventory availability against Show {selectedCase.showId}.
+              Case has been received and routed to <strong>{selectedCase.queue}</strong>. Run the automated screen capacity check to advance to Stage 2: Availability.
             </p>
-            <div className="action-controls-row">
+            <div style={{ marginTop: '12px', display: 'flex', gap: '10px' }}>
               <button 
                 type="button" 
                 className="btn-primary-action"
-                onClick={() => runAvailabilityCheck(selectedCase.caseId, 'Staff Ops Agent')}
+                onClick={() => runAvailabilityCheck(selectedCase.caseId)}
               >
-                Run Availability Check → Advance to Approval
+                Run Automated Capacity Verification
               </button>
             </div>
           </>
         )}
 
-        {selectedCase.stage?.includes('Availability') && (
+        {(selectedCase.stage === STAGES.AVAILABILITY || selectedCase.status === STATUSES.PENDING_AVAILABILITY) && (
           <>
-            <div className="action-box-header">
-              <div className="action-box-title">
-                <span>Stage 2 Availability — Seat Inventory Verification</span>
-              </div>
-              <span style={{ fontSize: '11px', color: show?.seatsRemaining >= selectedCase.seatCount ? 'var(--emerald-500)' : 'var(--danger-red)', fontWeight: '700' }}>
-                {show?.seatsRemaining} seats remain (Requested: {selectedCase.seatCount})
-              </span>
+            <div className="action-box-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ fontWeight: '700', color: '#FBBF24', fontSize: '14px' }}>Stage 2: Availability Verification</div>
+              <QueueBadge queue={selectedCase.queue} />
             </div>
-
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              System checks requested {selectedCase.seatCount} seats vs available capacity. If sufficient, Total Cost is confirmed and case routes to Stage 3 Customer Approval Checkpoint.
+              Verify screen capacity ({show?.seatsRemaining} remaining of {show?.totalCapacity}). Once passed, the case advances to Stage 3: Approval for customer confirmation.
             </p>
-
-            <div className="action-controls-row">
-              {show?.seatsRemaining >= selectedCase.seatCount ? (
-                <button 
-                  type="button" 
-                  className="btn-primary-action"
-                  onClick={() => runAvailabilityCheck(selectedCase.caseId, 'Staff Ops Agent')}
-                >
-                  Verify Capacity & Advance to Approval
-                </button>
-              ) : (
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--danger-red)', fontSize: '12px', fontWeight: '600' }}>
-                    Capacity Deficit ({selectedCase.seatCount - (show?.seatsRemaining || 0)} seats short)
-                  </span>
-                  <button 
-                    type="button" 
-                    className="btn-secondary-action"
-                    onClick={() => setAltShowModal(true)}
-                  >
-                    Suggest Alternate Shows
-                  </button>
-                </div>
-              )}
+            <div style={{ marginTop: '12px', display: 'flex', gap: '10px' }}>
+              <button 
+                type="button" 
+                className="btn-primary-action"
+                onClick={() => runAvailabilityCheck(selectedCase.caseId)}
+              >
+                Re-verify Availability
+              </button>
             </div>
           </>
         )}
 
-        {selectedCase.stage?.includes('Approval') && selectedCase.status === STATUSES.PENDING_APPROVAL && (
+        {(selectedCase.stage === STAGES.APPROVAL && selectedCase.status === STATUSES.PENDING_APPROVAL) && (
           <>
-            <div className="action-box-header">
-              <div className="action-box-title">
-                <span>Stage 3 Approval — Customer Confirmation Checkpoint</span>
-              </div>
-              <span className="tab-badge" style={{ color: 'var(--amber-500)', borderColor: 'var(--amber-500)' }}>
-                Awaiting Explicit Confirmation
-              </span>
+            <div className="action-box-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ fontWeight: '700', color: '#FBBF24', fontSize: '14px' }}>Stage 3: Approval — Customer Confirmation Checkpoint</div>
+              <QueueBadge queue={selectedCase.queue} />
             </div>
-
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              Seats are verified. Customer confirmation is required to lock seats and generate tickets. Ops can confirm on behalf of customer or open the customer-facing confirmation screen.
+              Seats are verified. Case is awaiting customer confirmation at the Approval Checkpoint. Operator can also confirm on behalf of customer or open the customer view.
             </p>
-
-            <div className="action-controls-row">
+            <div style={{ marginTop: '12px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <button 
                 type="button" 
                 className="btn-primary-action"
-                onClick={() => confirmBooking(selectedCase.caseId, 'Staff Agent (Customer Authorized)')}
+                style={{ background: '#10B981', borderColor: '#10B981' }}
+                onClick={() => confirmBooking(selectedCase.caseId, 'Operator Override')}
               >
-                Confirm & Execute Booking (${selectedCase.totalCost?.toFixed(2)})
+                ✓ Operator Confirm & Execute (Stage 4)
               </button>
-
               <button 
                 type="button" 
                 className="btn-secondary-action"
-                onClick={() => {
-                  setCustomerActiveCaseId(selectedCase.caseId);
-                  setActiveRole('customer');
-                }}
+                onClick={handleOpenCustomerCheckpoint}
               >
-                Open in Customer Checkpoint View ↗
+                Open Customer Checkpoint View
               </button>
-
               <button 
                 type="button" 
-                className="btn-cancel-action"
-                onClick={() => {
-                  const reason = window.prompt('Enter cancellation reason:', 'Customer requested cancellation at approval checkpoint');
-                  if (reason) cancelBooking(selectedCase.caseId, reason, 'Staff Agent');
-                }}
+                className="btn-secondary-action"
+                style={{ color: '#EF4444', borderColor: 'rgba(239, 68, 68, 0.4)' }}
+                onClick={() => cancelBooking(selectedCase.caseId, 'Cancelled by operator', 'Staff Operator')}
               >
-                Cancel Request
+                ✕ Cancel Booking Request
               </button>
             </div>
           </>
@@ -240,61 +214,50 @@ export function CaseDetail() {
 
         {selectedCase.status === STATUSES.RESOLVED_CONFIRMED && (
           <>
-            <div className="action-box-header">
-              <div className="action-box-title" style={{ color: 'var(--emerald-500)' }}>
-                <span>Stage 4 Booking Execution — Resolved & Confirmed</span>
-              </div>
-              <span className="tab-badge" style={{ color: 'var(--emerald-500)', borderColor: 'var(--emerald-border)' }}>
-                Ref: {selectedCase.bookingReference}
-              </span>
+            <div className="action-box-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ fontWeight: '700', color: '#34D399', fontSize: '14px' }}>Stage 4: Booking Execution (Resolved-Confirmed)</div>
+              <span className="tab-badge" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#34D399' }}>Ref: {selectedCase.bookingReference}</span>
             </div>
-
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              Booking is executed. Seats are locked and decremented from show capacity. Confirmation correspondence dispatched to {selectedCase.customerEmail}.
+              Auditorium seats locked and digital pass issued. Confirmation correspondence delivered to customer.
             </p>
-
-            <div className="action-controls-row">
+            <div style={{ marginTop: '12px', display: 'flex', gap: '10px' }}>
               <button 
                 type="button" 
-                className="btn-primary-action"
+                className="btn-view-pass"
+                style={{ background: '#E50914', color: '#fff', padding: '6px 14px', borderRadius: '4px', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                 onClick={() => setShowTicketModal(true)}
               >
-                <IconTicketStub size={14} />
-                View & Print Ticket Voucher
+                <IconTicketStub size={15} />
+                View Customer Ticket Pass
               </button>
             </div>
           </>
         )}
 
         {selectedCase.status === STATUSES.RESOLVED_CANCELLED && (
-          <>
-            <div className="action-box-header">
-              <div className="action-box-title" style={{ color: 'var(--text-muted)' }}>
-                <span>Case Lifecycle Terminated — Resolved-Cancelled</span>
-              </div>
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              This booking request was cancelled. No seats were decremented and no confirmation correspondence was dispatched.
-            </p>
-          </>
+          <div>
+            <div style={{ fontWeight: '700', color: '#A1A1AA', fontSize: '14px' }}>Resolved-Cancelled</div>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>This request was cancelled without locking auditorium seat inventory.</p>
+          </div>
         )}
       </div>
 
-      {/* 6. Referenced Data Entities (Movie & Show) */}
-      <div className="entities-grid">
+      {/* 6. Entity Data Preview Grid */}
+      <div className="entity-preview-grid">
         {/* Movie Object */}
         <div className="entity-card">
           <div className="entity-card-header">
-            <span>Referenced Movie</span>
-            <span className="movie-card-badge">{movie?.certificate || 'PG-13'}</span>
+            <span>Referenced Feature ({movie?.id})</span>
+            <span className="badge-cert">{movie?.certificate || 'UA'}</span>
           </div>
 
-          <div className="entity-name">{movie?.title || 'Unknown Title'}</div>
-          
+          <div className="entity-name">{movie?.title}</div>
+
           <div className="entity-meta-list">
             <div><strong>Genre:</strong> {movie?.genre}</div>
             <div><strong>Language:</strong> {movie?.language} • <strong>Runtime:</strong> {movie?.durationMinutes} mins</div>
-            <div><strong>Rating:</strong> ★ {movie?.ratingScore} / 10</div>
+            <div><strong>Rating:</strong> ⭐ {movie?.ratingScore} / 10</div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', fontStyle: 'italic' }}>
               "{movie?.synopsis}"
             </div>
@@ -305,17 +268,15 @@ export function CaseDetail() {
         <div className="entity-card">
           <div className="entity-card-header">
             <span>Referenced Show ({show?.id})</span>
-            <span className={`queue-badge ${show?.showType === 'Premium' ? 'queue-premium' : 'queue-standard'}`}>
-              {show?.showType}
-            </span>
+            <QueueBadge queue={selectedCase.queue} />
           </div>
 
           <div className="entity-name">{show?.theatre}</div>
 
           <div className="entity-meta-list">
-            <div><strong>Screen:</strong> {show?.screen}</div>
+            <div><strong>Screen:</strong> {show?.screen} ({show?.format || 'Standard'})</div>
             <div><strong>Date & Time:</strong> {show?.date} at {show?.time}</div>
-            <div><strong>Base Seat Price:</strong> ${show?.basePrice?.toFixed(2)}</div>
+            <div><strong>Base Seat Price:</strong> {formatINR(show?.basePrice || 250)}</div>
             
             <div className="capacity-meter">
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
@@ -343,33 +304,33 @@ export function CaseDetail() {
 
         <div className="cost-row">
           <span>Show Base Rate:</span>
-          <span className="cost-val">${show?.basePrice?.toFixed(2)}</span>
+          <span className="cost-val">{formatINR(show?.basePrice || 250)}</span>
         </div>
 
         <div className="cost-row">
           <span>Seat Category: {categoryConfig.label} ({categoryConfig.multiplier}x):</span>
-          <span className="cost-val">${((show?.basePrice || 15) * categoryConfig.multiplier).toFixed(2)} / seat</span>
+          <span className="cost-val">{formatINR(((show?.basePrice || 250) * categoryConfig.multiplier))} / seat</span>
         </div>
 
         <div className="cost-row">
           <span>Seat Quantity ({selectedCase.seatCount} seats):</span>
           <span className="cost-val">
-            ${(((show?.basePrice || 15) * categoryConfig.multiplier) * selectedCase.seatCount).toFixed(2)}
+            {formatINR((((show?.basePrice || 250) * categoryConfig.multiplier) * selectedCase.seatCount))}
           </span>
         </div>
 
         <div className="cost-row">
-          <span>Digital Ticketing & Facility Fee ($2.50 / seat):</span>
-          <span className="cost-val">${(2.50 * selectedCase.seatCount).toFixed(2)}</span>
+          <span>Convenience Fee & Taxes (₹35.40 / seat):</span>
+          <span className="cost-val">{formatINR(35.40 * selectedCase.seatCount)}</span>
         </div>
 
         <div className="cost-row total-row">
           <span>TOTAL COST (Calculated):</span>
-          <span className="total-val">${selectedCase.totalCost?.toFixed(2)}</span>
+          <span className="total-val">{formatINR(selectedCase.totalCost)}</span>
         </div>
       </div>
 
-      {/* 8. Audit Trail / Case Timeline (Hero UI Element) */}
+      {/* 8. Audit Trail / Case Timeline */}
       <div className="audit-trail-card">
         <div className="audit-trail-title">
           <IconAudit size={14} />
@@ -402,7 +363,7 @@ export function CaseDetail() {
 
         {selectedCase.correspondenceLog?.length === 0 ? (
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 0' }}>
-            No correspondence dispatched yet. Triggered automatically on Stage 4 Booking Execution.
+            No correspondence dispatched yet. Dispatched automatically on Stage 4 Booking Execution.
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -451,7 +412,8 @@ export function CaseDetail() {
                 fontFamily: 'var(--font-mono)',
                 whiteSpace: 'pre-wrap',
                 lineHeight: 1.4,
-                border: '1px solid var(--border-default)'
+                border: '1px solid var(--border-default)',
+                marginTop: '10px'
               }}>
                 {selectedCorrModal.body}
               </pre>

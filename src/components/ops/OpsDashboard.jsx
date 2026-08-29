@@ -111,7 +111,7 @@ export function OpsDashboard() {
               className={`queue-tab-btn ${activeQueueFilter === QUEUES.PREMIUM ? 'active' : ''}`}
               onClick={() => setActiveQueueFilter(QUEUES.PREMIUM)}
             >
-              <span>Premium Queue</span>
+              <span>Premium ShowQueue</span>
               <span className="tab-badge" style={{ color: '#A5B4FC' }}>{metrics.premiumQueueCount}</span>
             </button>
 
@@ -120,7 +120,7 @@ export function OpsDashboard() {
               className={`queue-tab-btn ${activeQueueFilter === QUEUES.STANDARD ? 'active' : ''}`}
               onClick={() => setActiveQueueFilter(QUEUES.STANDARD)}
             >
-              <span>Standard Queue</span>
+              <span>Standard ShowQueue</span>
               <span className="tab-badge">{metrics.standardQueueCount}</span>
             </button>
           </div>
@@ -144,10 +144,10 @@ export function OpsDashboard() {
             onChange={(e) => setActiveStageFilter(e.target.value)}
           >
             <option value="ALL">All Stages</option>
-            <option value="Intake">Stage 1: Intake</option>
+            <option value="Initial">Stage 1: Initial Stage</option>
             <option value="Availability">Stage 2: Availability</option>
             <option value="Approval">Stage 3: Approval</option>
-            <option value="Execution">Stage 4: Execution</option>
+            <option value="Execution">Stage 4: Booking Execution</option>
           </select>
 
           {/* Status Filter Dropdown */}
@@ -162,6 +162,7 @@ export function OpsDashboard() {
             <option value={STATUSES.PENDING_APPROVAL}>Pending-Approval</option>
             <option value={STATUSES.RESOLVED_CONFIRMED}>Resolved-Confirmed</option>
             <option value={STATUSES.RESOLVED_CANCELLED}>Resolved-Cancelled</option>
+            <option value={STATUSES.RESOLVED_REFUNDED}>Resolved-Refunded</option>
           </select>
         </div>
 

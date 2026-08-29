@@ -36,7 +36,7 @@ export function CustomerPortal() {
           className={`portal-nav-btn ${activeTab === 'new_request' ? 'active' : ''}`}
           onClick={() => setActiveTab('new_request')}
         >
-          1. New Booking Request (Intake)
+          1. New Booking Request (Initial Stage)
         </button>
 
         <button
@@ -44,7 +44,7 @@ export function CustomerPortal() {
           className={`portal-nav-btn ${activeTab === 'checkpoint' ? 'active' : ''}`}
           onClick={() => setActiveTab('checkpoint')}
         >
-          2. Confirmation Checkpoint & Case Tracker
+          2. Stage 3 Approval Checkpoint & Case Tracker
         </button>
       </nav>
 

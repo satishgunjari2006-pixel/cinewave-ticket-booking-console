@@ -62,7 +62,7 @@ export function CaseTable({ onOpenCase }) {
                       if (onOpenCase) onOpenCase(c);
                     }}
                   >
-                    <td className="case-id-cell">
+                    <td className="case-id-cell font-mono">
                       {c.caseId}
                     </td>
 

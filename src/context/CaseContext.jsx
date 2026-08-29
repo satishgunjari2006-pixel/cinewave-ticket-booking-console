@@ -9,6 +9,7 @@ import {
   STATUSES, 
   QUEUES, 
   SHOW_TYPES, 
+  determineShowQueue,
   SEAT_CATEGORIES,
   LOCATIONS,
   SLA_GOAL_HOURS, 
@@ -20,12 +21,12 @@ import { calculateSLA, SLA_STATES } from '../utils/slaCalculator';
 
 const CaseContext = createContext();
 
-const STORAGE_KEY_MOVIES = 'cinewave_movies_v4';
-const STORAGE_KEY_SHOWS = 'cinewave_shows_v4';
-const STORAGE_KEY_CASES = 'cinewave_cases_v4';
-const STORAGE_KEY_OFFSET = 'cinewave_time_offset_v4';
-const STORAGE_KEY_CITY = 'cinewave_city_v4';
-const STORAGE_KEY_STATE = 'cinewave_state_v4';
+const STORAGE_KEY_MOVIES = 'cinewave_movies_v5';
+const STORAGE_KEY_SHOWS = 'cinewave_shows_v5';
+const STORAGE_KEY_CASES = 'cinewave_cases_v5';
+const STORAGE_KEY_OFFSET = 'cinewave_time_offset_v5';
+const STORAGE_KEY_CITY = 'cinewave_city_v5';
+const STORAGE_KEY_STATE = 'cinewave_state_v5';
 
 export function CaseProvider({ children }) {
   // 1. Core State
@@ -147,7 +148,7 @@ export function CaseProvider({ children }) {
   };
 
   /**
-   * Stage 1: Create a new Booking Request Case
+   * Stage 1 -> Stage 2 -> Stage 3: Create Booking Request & Advance to Approval Checkpoint
    */
   const createBookingRequest = ({
     customerName,
@@ -168,13 +169,47 @@ export function CaseProvider({ children }) {
     const count = Math.max(1, parseInt(seatCount, 10) || 1);
     const costCalc = calculateTotalCost(show, count, seatCategory, foodItems);
 
-    const assignedQueue = show.showType === SHOW_TYPES.PREMIUM 
-      ? QUEUES.PREMIUM 
-      : QUEUES.STANDARD;
+    // Queue Routing based on format/showType
+    const assignedQueue = determineShowQueue(show.format, show.showType);
 
     const caseNumber = Math.floor(1100 + Math.random() * 8900);
     const caseId = `CW-REQ-${caseNumber}`;
     const nowIso = new Date(simulatedNow).toISOString();
+
+    const isAvailable = show.seatsRemaining >= count;
+
+    const initialHistory = [
+      {
+        stage: STAGES.INITIAL,
+        action: 'Case Initialized',
+        actor: `${customerName || 'Customer'} (Intake Flow)`,
+        timestamp: nowIso,
+        notes: `Customer requested ${count} seat(s) [${seatCategory}] for "${movie?.title || 'Movie'}" at ${show.theatre} (${show.city}, ${show.state}) with ${foodItems?.length || 0} F&B item(s). Routed to "${assignedQueue}". Payment authorized via ${paymentMethod}.`,
+      },
+    ];
+
+    let finalStatus = STATUSES.PENDING_APPROVAL;
+    let finalStage = STAGES.APPROVAL;
+
+    if (isAvailable) {
+      initialHistory.push({
+        stage: STAGES.AVAILABILITY,
+        action: 'Availability Check Passed',
+        actor: 'System Availability Engine',
+        timestamp: new Date(simulatedNow + 200).toISOString(),
+        notes: `Auditorium capacity verified (${show.seatsRemaining} seats available at ${show.theatre}, Screen ${show.screen}). Cost calculated at ₹${costCalc.totalCost.toFixed(2)}. Case transitioned to Stage 3: Approval for customer confirmation.`,
+      });
+    } else {
+      finalStatus = STATUSES.PENDING_AVAILABILITY;
+      finalStage = STAGES.AVAILABILITY;
+      initialHistory.push({
+        stage: STAGES.AVAILABILITY,
+        action: 'Capacity Constraint Flagged',
+        actor: 'System Capacity Engine',
+        timestamp: new Date(simulatedNow + 200).toISOString(),
+        notes: `Selected show is at capacity (${show.seatsRemaining} seats left, requested ${count}). Assigned to Ops Dispatch queue for alternate show reassignment.`,
+      });
+    }
 
     const newCase = {
       caseId,
@@ -189,8 +224,8 @@ export function CaseProvider({ children }) {
       totalCost: costCalc.totalCost,
       paymentTxnId: paymentTxnId || `CW-TXN-${Math.floor(100000 + Math.random() * 900000)}`,
       paymentMethod: paymentMethod || 'UPI',
-      status: STATUSES.NEW,
-      stage: STAGES.INTAKE,
+      status: finalStatus,
+      stage: finalStage,
       queue: assignedQueue,
       createdAt: nowIso,
       slaGoalAt: new Date(simulatedNow + (SLA_GOAL_HOURS * 3600 * 1000)).toISOString(),
@@ -198,15 +233,7 @@ export function CaseProvider({ children }) {
       bookingReference: null,
       confirmedAt: null,
       resolvedAt: null,
-      stageHistory: [
-        {
-          stage: STAGES.INTAKE,
-          action: 'Case Intake Initialized',
-          actor: `${customerName || 'Customer'} (Intake Flow)`,
-          timestamp: nowIso,
-          notes: `Requested ${count} seat(s) [${seatCategory}] for "${movie?.title || 'Movie'}" at ${show.theatre} (${show.city}, ${show.state}) with ${foodItems?.length || 0} F&B item(s). Payment authorized via ${paymentMethod}. Initial calculated cost: ₹${costCalc.totalCost.toFixed(2)}.`,
-        },
-      ],
+      stageHistory: initialHistory,
       correspondenceLog: [],
     };
 
@@ -218,7 +245,7 @@ export function CaseProvider({ children }) {
   };
 
   /**
-   * Stage 2: Availability Verification
+   * Stage 2: Availability Check (Manual re-verification in Ops Console)
    */
   const runAvailabilityCheck = (caseId, actor = 'Staff Ops Agent') => {
     const targetCase = cases.find(c => c.caseId === caseId);
@@ -252,18 +279,14 @@ export function CaseProvider({ children }) {
       setCases(prev => prev.map(c => c.caseId === caseId ? updatedCase : c));
       return { success: true, caseItem: updatedCase, remaining: show.seatsRemaining };
     } else {
-      const alternateShows = shows.filter(
-        s => s.movieId === show.movieId && s.city === show.city && s.id !== show.id && s.seatsRemaining >= targetCase.seatCount
-      );
-
       const updatedHistory = [
         ...targetCase.stageHistory,
         {
           stage: STAGES.AVAILABILITY,
-          action: 'Availability Check — Insufficient Capacity',
+          action: 'Availability Check Failed — Full Capacity',
           actor,
           timestamp: nowIso,
-          notes: `Capacity deficit detected at ${show.theatre}. Requested: ${targetCase.seatCount}, Available: ${show.seatsRemaining}. Case requires alternate show selection.`,
+          notes: `Show is sold out (${show.seatsRemaining} seats remaining). Alternate show routing required.`,
         },
       ];
 
@@ -275,18 +298,12 @@ export function CaseProvider({ children }) {
       };
 
       setCases(prev => prev.map(c => c.caseId === caseId ? updatedCase : c));
-      return { 
-        success: false, 
-        caseItem: updatedCase, 
-        remaining: show.seatsRemaining, 
-        deficit: targetCase.seatCount - show.seatsRemaining,
-        alternateShows,
-      };
+      return { success: false, message: 'Show is at full capacity', caseItem: updatedCase };
     }
   };
 
   /**
-   * Stage 3 & 4: Confirm Booking
+   * Stage 3 -> Stage 4: Explicit Customer Confirmation & Execution
    */
   const confirmBooking = (caseId, actor = 'Customer Checkpoint') => {
     const targetCase = cases.find(c => c.caseId === caseId);
@@ -309,34 +326,37 @@ export function CaseProvider({ children }) {
         return {
           ...s,
           seatsRemaining: Math.max(0, s.seatsRemaining - targetCase.seatCount),
+          availabilityStatus: (s.seatsRemaining - targetCase.seatCount) <= 10 ? 'ALMOST_FULL' : s.availabilityStatus,
         };
       }
       return s;
     }));
 
-    // 2. Generate correspondence
-    const correspondenceItem = createConfirmationCorrespondence(
-      { ...targetCase, bookingReference: ticketRef },
+    // 2. Generate simulated email confirmation correspondence
+    const correspondence = createConfirmationCorrespondence({
+      caseItem: targetCase,
       show,
-      movie
-    );
+      movie,
+      ticketRef,
+      confirmedAt: nowIso,
+    });
 
-    // 3. Update Case history
+    // 3. Stage 3 (Approval) -> Stage 4 (Booking Execution)
     const updatedHistory = [
       ...targetCase.stageHistory,
       {
         stage: STAGES.APPROVAL,
-        action: 'Booking Approved & Authorized',
+        action: 'Customer Explicit Confirmation Received',
         actor,
         timestamp: nowIso,
-        notes: `Explicit customer confirmation received. Total cost authorized: ₹${targetCase.totalCost.toFixed(2)}. Case advanced to Stage 4: Booking Execution.`,
+        notes: `Customer reviewed seats [${targetCase.selectedSeats.join(', ')}] and total cost (₹${targetCase.totalCost.toFixed(2)}) and explicitly confirmed reservation at checkpoint.`,
       },
       {
         stage: STAGES.EXECUTION,
-        action: 'Booking Executed & Seats Reserved',
-        actor: 'Stage 4 Execution Engine',
+        action: 'Booking Execution & Inventory Lock',
+        actor: 'Execution Worker (Stage 4)',
         timestamp: nowIso,
-        notes: `Reserved ${targetCase.seatCount} seats on Show ${show.id} at ${show.theatre} (${show.city}). Generated Ticket Ref ${ticketRef}. Dispatched confirmation correspondence. Case resolved.`,
+        notes: `Locked ${targetCase.seatCount} seats in ${show.screen}. Generated Booking Reference "${ticketRef}". Entry barcode active. Correspondence dispatched to ${targetCase.customerEmail}. Case resolved.`,
       },
     ];
 
@@ -348,7 +368,7 @@ export function CaseProvider({ children }) {
       confirmedAt: nowIso,
       resolvedAt: nowIso,
       stageHistory: updatedHistory,
-      correspondenceLog: [correspondenceItem, ...(targetCase.correspondenceLog || [])],
+      correspondenceLog: [correspondence, ...(targetCase.correspondenceLog || [])],
     };
 
     setCases(prev => prev.map(c => c.caseId === caseId ? updatedCase : c));
@@ -356,9 +376,9 @@ export function CaseProvider({ children }) {
   };
 
   /**
-   * Cancel Booking
+   * Cancel Booking (at Approval Checkpoint or from Ops Console)
    */
-  const cancelBooking = (caseId, reason = 'Cancelled by customer', actor = 'Customer Checkpoint') => {
+  const cancelBooking = (caseId, reason = 'Cancelled by customer at approval checkpoint', actor = 'Customer Checkpoint') => {
     const targetCase = cases.find(c => c.caseId === caseId);
     if (!targetCase) return;
 
@@ -378,26 +398,28 @@ export function CaseProvider({ children }) {
     const updatedCase = {
       ...targetCase,
       status: STATUSES.RESOLVED_CANCELLED,
+      stage: STAGES.APPROVAL,
       resolvedAt: nowIso,
       stageHistory: updatedHistory,
     };
 
     setCases(prev => prev.map(c => c.caseId === caseId ? updatedCase : c));
+    return { success: true, caseItem: updatedCase };
   };
 
   /**
-   * Process Refund (Cancellation with Refund)
+   * Process Refund
    */
-  const processRefund = (caseId, reason = 'Customer requested cancellation with refund', actor = 'Staff Ops Agent') => {
+  const processRefund = (caseId, actor = 'Staff Finance Agent', customReason = '') => {
     const targetCase = cases.find(c => c.caseId === caseId);
     if (!targetCase) return { success: false, message: 'Case not found' };
 
     const show = shows.find(s => s.id === targetCase.showId);
-    const refundCalc = calculateRefundAmount(targetCase.totalCost, 24);
+    const refundDetails = calculateRefundAmount(targetCase.totalCost, show?.date, show?.time);
     const nowIso = new Date(simulatedNow).toISOString();
 
-    // If case was confirmed, restore show seat capacity
-    if (targetCase.status === STATUSES.RESOLVED_CONFIRMED && show) {
+    // Release seats back to show inventory if confirmed
+    if (show && targetCase.status === STATUSES.RESOLVED_CONFIRMED) {
       setShows(prev => prev.map(s => {
         if (s.id === show.id) {
           return {
@@ -409,75 +431,77 @@ export function CaseProvider({ children }) {
       }));
     }
 
+    const refundNotes = customReason 
+      ? `Refund processed (${refundDetails.policyTierLabel}): ₹${refundDetails.refundAmount.toFixed(2)} refunded. Reason: ${customReason}.`
+      : `Refund processed (${refundDetails.policyTierLabel}): ₹${refundDetails.refundAmount.toFixed(2)} refunded (85% refund, 15% cancellation fee ₹${refundDetails.deductionAmount.toFixed(2)}).`;
+
     const updatedHistory = [
       ...targetCase.stageHistory,
       {
         stage: targetCase.stage,
-        action: 'Booking Cancelled & Refund Processed',
+        action: 'Refund & Cancellation Executed',
         actor,
         timestamp: nowIso,
-        notes: `Issued ${refundCalc.refundPercentage}% refund of ₹${refundCalc.refundAmount.toFixed(2)} (cancellation fee: ₹${refundCalc.cancellationFee.toFixed(2)}). Reason: ${reason}. Seats released back to inventory.`,
+        notes: refundNotes,
       },
     ];
 
     const updatedCase = {
       ...targetCase,
       status: STATUSES.RESOLVED_REFUNDED,
-      refundAmount: refundCalc.refundAmount,
-      cancellationFee: refundCalc.cancellationFee,
       resolvedAt: nowIso,
+      refundDetails: {
+        amount: refundDetails.refundAmount,
+        deduction: refundDetails.deductionAmount,
+        processedAt: nowIso,
+        reason: customReason || 'Customer requested cancellation with refund',
+      },
       stageHistory: updatedHistory,
     };
 
     setCases(prev => prev.map(c => c.caseId === caseId ? updatedCase : c));
-    return { success: true, caseItem: updatedCase, refundCalc };
+    return { success: true, caseItem: updatedCase, refundDetails };
   };
 
   /**
-   * Reschedule Booking to an Alternate Show
+   * Reschedule Booking to Alternate Show
    */
-  const rescheduleBooking = (caseId, newShowId, newSeats = [], actor = 'Staff Ops Agent') => {
+  const rescheduleBooking = (caseId, newShowId, actor = 'Staff Ops Agent') => {
     const targetCase = cases.find(c => c.caseId === caseId);
-    if (!targetCase) return { success: false, message: 'Case not found' };
-
-    const oldShow = shows.find(s => s.id === targetCase.showId);
     const newShow = shows.find(s => s.id === newShowId);
-    if (!newShow) return { success: false, message: 'New Show not found' };
+    const oldShow = shows.find(s => s.id === targetCase?.showId);
+    if (!targetCase || !newShow) return { success: false, message: 'Invalid case or show' };
 
     if (newShow.seatsRemaining < targetCase.seatCount) {
-      return { success: false, message: 'Selected new show has insufficient capacity' };
+      return { success: false, message: 'Target show does not have sufficient seats' };
     }
 
     const nowIso = new Date(simulatedNow).toISOString();
 
-    // 1. Release seats from old show
+    // Release old seats
     if (oldShow && targetCase.status === STATUSES.RESOLVED_CONFIRMED) {
-      setShows(prev => prev.map(s => {
-        if (s.id === oldShow.id) {
-          return { ...s, seatsRemaining: Math.min(s.totalCapacity, s.seatsRemaining + targetCase.seatCount) };
-        }
-        if (s.id === newShow.id) {
-          return { ...s, seatsRemaining: Math.max(0, s.seatsRemaining - targetCase.seatCount) };
-        }
-        return s;
-      }));
+      setShows(prev => prev.map(s => s.id === oldShow.id ? { ...s, seatsRemaining: s.seatsRemaining + targetCase.seatCount } : s));
     }
+    // Lock new seats
+    setShows(prev => prev.map(s => s.id === newShow.id ? { ...s, seatsRemaining: s.seatsRemaining - targetCase.seatCount } : s));
+
+    const newQueue = determineShowQueue(newShow.format, newShow.showType);
 
     const updatedHistory = [
       ...targetCase.stageHistory,
       {
         stage: targetCase.stage,
-        action: 'Showtime Rescheduled',
+        action: 'Show Rescheduled',
         actor,
         timestamp: nowIso,
-        notes: `Rescheduled from ${oldShow?.theatre} (${oldShow?.date} ${oldShow?.time}) to ${newShow.theatre} (${newShow.date} ${newShow.time}). New seats: ${newSeats.join(', ') || targetCase.selectedSeats?.join(', ')}.`,
+        notes: `Show changed from ${oldShow?.theatre} (${oldShow?.date} ${oldShow?.time}) to ${newShow.theatre} (${newShow.date} ${newShow.time}). Queue updated to "${newQueue}".`,
       },
     ];
 
     const updatedCase = {
       ...targetCase,
       showId: newShowId,
-      selectedSeats: newSeats.length > 0 ? newSeats : targetCase.selectedSeats,
+      queue: newQueue,
       stageHistory: updatedHistory,
     };
 
@@ -515,6 +539,55 @@ export function CaseProvider({ children }) {
   };
 
   /**
+   * Movie Management CRUD (Staff Console)
+   */
+  const addMovie = (movieData) => {
+    const id = `MOV-${Math.floor(106 + Math.random() * 890)}`;
+    const newMovie = {
+      id,
+      title: movieData.title || 'Untitled Movie',
+      genre: movieData.genre || 'Action • Thriller',
+      language: movieData.language || 'English, Hindi',
+      durationMinutes: parseInt(movieData.durationMinutes, 10) || 120,
+      certificate: movieData.certificate || 'UA 13+',
+      ratingScore: parseFloat(movieData.ratingScore) || 8.0,
+      votesCount: movieData.votesCount || '10K votes',
+      synopsis: movieData.synopsis || 'Movie synopsis...',
+      posterUrl: movieData.posterUrl || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=600&auto=format&fit=crop&q=80',
+      bannerUrl: movieData.bannerUrl || 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=1200&auto=format&fit=crop&q=80',
+      tags: movieData.tags || ['Now Showing'],
+      formats: movieData.formats || ['IMAX 2D', '2D'],
+      accentColor: movieData.accentColor || '#B91C1C',
+    };
+    setMovies(prev => [newMovie, ...prev]);
+    return newMovie;
+  };
+
+  const updateMovie = (movieId, updatedFields) => {
+    setMovies(prev => prev.map(m => {
+      if (m.id === movieId) {
+        return {
+          ...m,
+          ...updatedFields,
+          durationMinutes: updatedFields.durationMinutes ? parseInt(updatedFields.durationMinutes, 10) : m.durationMinutes,
+          ratingScore: updatedFields.ratingScore ? parseFloat(updatedFields.ratingScore) : m.ratingScore,
+        };
+      }
+      return m;
+    }));
+  };
+
+  const deleteMovie = (movieId) => {
+    // Check if shows exist
+    const hasShows = shows.some(s => s.movieId === movieId);
+    if (hasShows) {
+      return { success: false, message: 'Cannot delete movie: active scheduled showtimes exist for this title.' };
+    }
+    setMovies(prev => prev.filter(m => m.id !== movieId));
+    return { success: true };
+  };
+
+  /**
    * Show inventory capacity updates (Show Manager)
    */
   const updateShowCapacity = (showId, totalCapacity, seatsRemaining) => {
@@ -530,9 +603,6 @@ export function CaseProvider({ children }) {
     }));
   };
 
-  /**
-   * Show pricing update (in INR)
-   */
   const updateShowPricing = (showId, basePrice) => {
     setShows(prev => prev.map(s => {
       if (s.id === showId) {
@@ -545,11 +615,11 @@ export function CaseProvider({ children }) {
     }));
   };
 
-  /**
-   * Add a new Show with location
-   */
   const addShow = (showData) => {
     const id = `SHW-${showData.city?.slice(0, 3).toUpperCase() || 'IND'}-${Math.floor(810 + Math.random() * 180)}`;
+    const format = showData.format || 'Standard 2D';
+    const showType = showData.showType || (format.match(/IMAX|4DX|Dolby|70mm|Luxe|VIP/i) ? SHOW_TYPES.PREMIUM : SHOW_TYPES.STANDARD);
+
     const newShow = {
       id,
       movieId: showData.movieId,
@@ -560,8 +630,8 @@ export function CaseProvider({ children }) {
       screen: showData.screen,
       date: showData.date,
       time: showData.time,
-      format: showData.format || 'Standard 2D',
-      showType: showData.showType || SHOW_TYPES.STANDARD,
+      format,
+      showType,
       totalCapacity: parseInt(showData.totalCapacity, 10) || 150,
       seatsRemaining: parseInt(showData.seatsRemaining, 10) || 150,
       availabilityStatus: 'AVAILABLE',
@@ -570,6 +640,15 @@ export function CaseProvider({ children }) {
     };
     setShows(prev => [newShow, ...prev]);
     return newShow;
+  };
+
+  const deleteShow = (showId) => {
+    const hasCases = cases.some(c => c.showId === showId && c.status !== STATUSES.RESOLVED_CANCELLED && c.status !== STATUSES.RESOLVED_REFUNDED);
+    if (hasCases) {
+      return { success: false, message: 'Cannot delete showtime: active booking cases are linked.' };
+    }
+    setShows(prev => prev.filter(s => s.id !== showId));
+    return { success: true };
   };
 
   const advanceSimulatedTime = (hours) => {
@@ -689,9 +768,13 @@ export function CaseProvider({ children }) {
         processRefund,
         rescheduleBooking,
         reassignQueue,
+        addMovie,
+        updateMovie,
+        deleteMovie,
         updateShowCapacity,
         updateShowPricing,
         addShow,
+        deleteShow,
         advanceSimulatedTime,
         resetSimulatedTime,
         resetData,

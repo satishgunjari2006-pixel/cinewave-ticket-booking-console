@@ -4,13 +4,14 @@ import { StatusBadge, StageBadge, QueueBadge } from '../common/StatusBadge';
 import { SLABadge } from '../common/SLABadge';
 import { STAGES, STATUSES, QUEUES, SEAT_CATEGORIES, FOOD_BEVERAGE_MENU } from '../../data/types';
 import { formatINR, calculateRefundAmount } from '../../utils/costCalculator';
-import { IconFilmReel, IconSeat, IconTicketStub, IconAudit, IconMail, IconSLAClock } from '../common/Icons';
+import { IconTicketStub, IconAudit, IconMail, IconSLAClock, IconAlertCircle } from '../common/Icons';
 import { TicketStubModal } from '../customer/TicketStubModal';
 import { WhatsAppPreviewModal } from '../customer/WhatsAppPreviewModal';
 
 export function CaseDrawer({ caseItem, onClose }) {
   const { 
-    shows,
+    shows, 
+    movies, 
     getCaseEntities, 
     simulatedNow, 
     runAvailabilityCheck, 
@@ -23,227 +24,208 @@ export function CaseDrawer({ caseItem, onClose }) {
     setCustomerActiveCaseId,
   } = useCaseContext();
 
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleShowId, setRescheduleShowId] = useState('');
   const [selectedCorrModal, setSelectedCorrModal] = useState(null);
   const [showTicketModal, setShowTicketModal] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
-  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
-  const [rescheduleShowId, setRescheduleShowId] = useState('');
+  const [customRefundReason, setCustomRefundReason] = useState('');
+  const [showRefundInput, setShowRefundInput] = useState(false);
 
   if (!caseItem) return null;
 
   const { movie, show } = getCaseEntities(caseItem);
   const categoryConfig = SEAT_CATEGORIES[caseItem.seatCategory] || SEAT_CATEGORIES.STANDARD;
 
+  // Determine stage progression index (0: Initial Stage, 1: Availability, 2: Approval, 3: Booking Execution)
   let currentStageIdx = 0;
-  if (caseItem.stage?.includes('Availability') || caseItem.stage === 'AVAILABILITY') currentStageIdx = 1;
-  if (caseItem.stage?.includes('Approval') || caseItem.stage === 'APPROVAL') currentStageIdx = 2;
-  if (caseItem.stage?.includes('Execution') || caseItem.stage === 'EXECUTION' || caseItem.status === STATUSES.RESOLVED_CONFIRMED) currentStageIdx = 3;
+  if (caseItem.stage === STAGES.AVAILABILITY || caseItem.stage?.includes('Availability')) currentStageIdx = 1;
+  if (caseItem.stage === STAGES.APPROVAL || caseItem.stage?.includes('Approval')) currentStageIdx = 2;
+  if (caseItem.stage === STAGES.EXECUTION || caseItem.stage?.includes('Execution') || caseItem.status === STATUSES.RESOLVED_CONFIRMED) currentStageIdx = 3;
 
   const isResolved = caseItem.status === STATUSES.RESOLVED_CONFIRMED || caseItem.status === STATUSES.RESOLVED_CANCELLED || caseItem.status === STATUSES.RESOLVED_REFUNDED;
+  const isConfirmed = caseItem.status === STATUSES.RESOLVED_CONFIRMED;
+  const isRefunded = caseItem.status === STATUSES.RESOLVED_REFUNDED;
+  const isCancelled = caseItem.status === STATUSES.RESOLVED_CANCELLED;
 
-  // Alternate shows for rescheduling (same movie)
-  const alternateShows = shows.filter(s => s.movieId === show?.movieId && s.id !== show?.id && s.seatsRemaining >= caseItem.seatCount);
+  const alternateShows = shows.filter(
+    s => s.movieId === show?.movieId && s.city === show?.city && s.id !== show?.id && s.seatsRemaining >= caseItem.seatCount
+  );
+
+  const refundCalc = show ? calculateRefundAmount(caseItem.totalCost, show.date, show.time) : null;
+
+  const handleOpenCustomerView = () => {
+    setCustomerActiveCaseId(caseItem.caseId);
+    setActiveRole('customer');
+  };
+
+  const handleProcessRefundClick = () => {
+    if (!showRefundInput) {
+      setShowRefundInput(true);
+      return;
+    }
+    const res = processRefund(caseItem.caseId, 'Staff Ops Dispatcher', customRefundReason);
+    if (res.success) {
+      setShowRefundInput(false);
+    }
+  };
 
   return (
-    <div className="drawer-backdrop" onClick={onClose}>
-      <aside className="drawer-panel" onClick={e => e.stopPropagation()} aria-label="Case Inspector">
+    <div className="drawer-overlay" onClick={onClose}>
+      <aside className="drawer-panel" onClick={e => e.stopPropagation()}>
         {/* Drawer Header */}
         <div className="drawer-header">
-          <div className="drawer-header-left">
-            <div className="drawer-title-row">
-              <h2 className="drawer-case-id">{caseItem.caseId}</h2>
+          <div className="drawer-title-row">
+            <div className="case-id-prominent">
+              <span>{caseItem.caseId}</span>
               <StatusBadge status={caseItem.status} />
-              <QueueBadge queue={caseItem.queue} />
             </div>
-            <div className="drawer-created-time">
-              Intake Created: {new Date(caseItem.createdAt).toLocaleString()} • Txn: <span className="font-mono">{caseItem.paymentTxnId || 'CW-TXN-OK'}</span>
-            </div>
+            <button type="button" className="drawer-close-btn" onClick={onClose}>✕</button>
           </div>
 
-          <div className="drawer-header-actions">
-            {!isResolved && (
-              <select
-                className="filter-select"
-                value={caseItem.queue}
-                onChange={(e) => reassignQueue(caseItem.caseId, e.target.value)}
-                title="Reassign Queue"
-              >
-                <option value={QUEUES.STANDARD}>Standard Queue</option>
-                <option value={QUEUES.PREMIUM}>Premium Queue</option>
-              </select>
-            )}
-
-            <button type="button" className="btn-close-drawer" onClick={onClose}>
-              ✕
-            </button>
+          <div className="drawer-meta-row">
+            <QueueBadge queue={caseItem.queue} />
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Created: {new Date(caseItem.createdAt).toLocaleString()}
+            </span>
           </div>
         </div>
 
-        {/* Drawer Body */}
+        {/* Drawer Body Scroll */}
         <div className="drawer-body">
-          {/* 1. SLA Urgency Monitor */}
+          {/* 1. SLA Urgency Status */}
           <SLABadge caseItem={caseItem} simulatedNow={simulatedNow} variant="detailed" />
 
-          {/* 2. 4-Stage Stepper */}
-          <div className="stage-tracker-wrapper">
+          {/* 2. 4-Stage Lifecycle Stepper */}
+          <div className="stage-tracker-wrapper" style={{ margin: '14px 0' }}>
             <div className="stage-tracker-title">Case Lifecycle Progress</div>
             <div className="stage-steps-row">
-              <div className={`stage-step-item ${currentStageIdx >= 0 ? (currentStageIdx > 0 ? 'completed' : 'active') : ''}`}>
-                <div className="stage-step-dot">{currentStageIdx > 0 ? '✓' : '1'}</div>
-                <div className="stage-step-label">1. Intake</div>
+              <div className={`stage-step-item ${currentStageIdx >= 0 ? (currentStageIdx > 0 ? 'stage-step-completed' : 'stage-step-active') : 'stage-step-upcoming'}`}>
+                <div className="stage-step-circle">{currentStageIdx > 0 ? '✓' : '1'}</div>
+                <div className="stage-step-meta">
+                  <span className="stage-step-name">Initial Stage</span>
+                  <span className="stage-step-desc">Intake & routing</span>
+                </div>
               </div>
 
-              <div className={`stage-step-item ${currentStageIdx >= 1 ? (currentStageIdx > 1 ? 'completed' : 'active') : ''}`}>
-                <div className="stage-step-dot">{currentStageIdx > 1 ? '✓' : '2'}</div>
-                <div className="stage-step-label">2. Availability</div>
+              <div className={`stage-step-item ${currentStageIdx >= 1 ? (currentStageIdx > 1 ? 'stage-step-completed' : 'stage-step-active') : 'stage-step-upcoming'}`}>
+                <div className="stage-step-circle">{currentStageIdx > 1 ? '✓' : '2'}</div>
+                <div className="stage-step-meta">
+                  <span className="stage-step-name">Availability</span>
+                  <span className="stage-step-desc">Screen capacity</span>
+                </div>
               </div>
 
-              <div className={`stage-step-item ${currentStageIdx >= 2 ? (currentStageIdx > 2 ? 'completed' : 'active') : ''}`}>
-                <div className="stage-step-dot">{currentStageIdx > 2 ? '✓' : '3'}</div>
-                <div className="stage-step-label">3. Approval</div>
+              <div className={`stage-step-item ${currentStageIdx >= 2 ? (currentStageIdx > 2 ? 'stage-step-completed' : 'stage-step-active') : 'stage-step-upcoming'}`}>
+                <div className="stage-step-circle">{currentStageIdx > 2 ? '✓' : '3'}</div>
+                <div className="stage-step-meta">
+                  <span className="stage-step-name">Approval</span>
+                  <span className="stage-step-desc">Confirmation checkpoint</span>
+                </div>
               </div>
 
-              <div className={`stage-step-item ${currentStageIdx >= 3 ? 'active' : ''}`}>
-                <div className="stage-step-dot">{caseItem.status === STATUSES.RESOLVED_CONFIRMED ? '✓' : '4'}</div>
-                <div className="stage-step-label">4. Execution</div>
+              <div className={`stage-step-item ${currentStageIdx >= 3 ? 'stage-step-completed' : 'stage-step-upcoming'}`}>
+                <div className="stage-step-circle">{isConfirmed ? '✓' : '4'}</div>
+                <div className="stage-step-meta">
+                  <span className="stage-step-name">Booking Execution</span>
+                  <span className="stage-step-desc">Locked & issued</span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* 3. Stage Action Workspace */}
-          <div className="stage-action-box">
-            {caseItem.stage?.includes('Intake') && caseItem.status === STATUSES.NEW && (
-              <>
-                <div className="action-box-header">
-                  <div className="action-box-title">
-                    <span>Stage 1 Intake — Capacity Check Required</span>
-                  </div>
-                  <span className="tab-badge">{caseItem.queue}</span>
-                </div>
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  Booking request received for {caseItem.seatCount} {categoryConfig.label} seat(s). Verify inventory availability against Show {caseItem.showId} at {show?.theatre} ({show?.city}).
-                </p>
-                <div className="action-controls-row">
-                  <button 
-                    type="button" 
-                    className="btn-primary-action"
-                    onClick={() => runAvailabilityCheck(caseItem.caseId, 'Staff Ops Agent')}
-                  >
-                    Run Availability Check → Advance to Approval
-                  </button>
-                </div>
-              </>
+          {/* 3. Action Workspace Toolbar */}
+          <div className="drawer-actions-box" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '14px', margin: '14px 0' }}>
+            <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: '700', marginBottom: '8px' }}>
+              Operational Actions & Queue Routing
+            </div>
+
+            {/* Queue Reassignment */}
+            {!isResolved && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Reassign Queue:</span>
+                <select
+                  className="filter-select"
+                  style={{ flex: 1 }}
+                  value={caseItem.queue}
+                  onChange={(e) => reassignQueue(caseItem.caseId, e.target.value)}
+                >
+                  <option value={QUEUES.STANDARD}>Standard ShowQueue</option>
+                  <option value={QUEUES.PREMIUM}>Premium ShowQueue</option>
+                </select>
+              </div>
             )}
 
-            {caseItem.stage?.includes('Availability') && (
-              <>
-                <div className="action-box-header">
-                  <div className="action-box-title">
-                    <span>Stage 2 Availability — Seat Inventory Verification</span>
-                  </div>
-                  <span style={{ fontSize: '12px', color: show?.seatsRemaining >= caseItem.seatCount ? 'var(--emerald-500)' : 'var(--danger-red)', fontWeight: '700' }}>
-                    {show?.seatsRemaining} seats remaining (Requested: {caseItem.seatCount})
-                  </span>
-                </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {caseItem.stage === STAGES.INITIAL && caseItem.status === STATUSES.NEW && (
+                <button 
+                  type="button" 
+                  className="btn-primary-action"
+                  onClick={() => runAvailabilityCheck(caseItem.caseId)}
+                >
+                  Run Capacity Check (Stage 2)
+                </button>
+              )}
 
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  System checks requested {caseItem.seatCount} seats vs available capacity. If sufficient, Total Cost is locked in INR and case routes to Stage 3 Customer Approval Checkpoint.
-                </p>
+              {(caseItem.stage === STAGES.AVAILABILITY || caseItem.status === STATUSES.PENDING_AVAILABILITY) && (
+                <button 
+                  type="button" 
+                  className="btn-primary-action"
+                  onClick={() => runAvailabilityCheck(caseItem.caseId)}
+                >
+                  Re-verify Screen Capacity
+                </button>
+              )}
 
-                <div className="action-controls-row">
+              {(caseItem.stage === STAGES.APPROVAL && caseItem.status === STATUSES.PENDING_APPROVAL) && (
+                <>
                   <button 
                     type="button" 
                     className="btn-primary-action"
-                    onClick={() => runAvailabilityCheck(caseItem.caseId, 'Staff Ops Agent')}
+                    style={{ background: '#10B981', borderColor: '#10B981' }}
+                    onClick={() => confirmBooking(caseItem.caseId, 'Operator Override')}
                   >
-                    Verify Capacity & Advance to Approval
-                  </button>
-                </div>
-              </>
-            )}
-
-            {caseItem.stage?.includes('Approval') && caseItem.status === STATUSES.PENDING_APPROVAL && (
-              <>
-                <div className="action-box-header">
-                  <div className="action-box-title">
-                    <span>Stage 3 Approval — Customer Confirmation Checkpoint</span>
-                  </div>
-                  <span className="tab-badge" style={{ color: 'var(--amber-500)', borderColor: 'var(--amber-500)' }}>
-                    Awaiting Explicit Customer Confirmation
-                  </span>
-                </div>
-
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  Seats are verified. Customer confirmation is required to lock seats and generate tickets. Ops can confirm on behalf of customer or open the customer-facing confirmation screen.
-                </p>
-
-                <div className="action-controls-row">
-                  <button 
-                    type="button" 
-                    className="btn-primary-action"
-                    onClick={() => confirmBooking(caseItem.caseId, 'Staff Agent (Customer Authorized)')}
-                  >
-                    Confirm & Execute Booking ({formatINR(caseItem.totalCost)})
+                    ✓ Confirm & Execute (Stage 4)
                   </button>
 
                   <button 
                     type="button" 
                     className="btn-secondary-action"
-                    onClick={() => {
-                      setCustomerActiveCaseId(caseItem.caseId);
-                      setActiveRole('customer');
-                      onClose();
-                    }}
+                    onClick={handleOpenCustomerView}
                   >
-                    Open in Customer Checkpoint View ↗
+                    Open Customer Checkpoint
                   </button>
 
                   <button 
                     type="button" 
-                    className="btn-cancel-action"
-                    onClick={() => {
-                      const reason = window.prompt('Enter cancellation reason:', 'Customer requested cancellation at approval checkpoint');
-                      if (reason) cancelBooking(caseItem.caseId, reason, 'Staff Agent');
-                    }}
+                    className="btn-secondary-action"
+                    style={{ color: '#EF4444', borderColor: 'rgba(239, 68, 68, 0.4)' }}
+                    onClick={() => cancelBooking(caseItem.caseId, 'Cancelled by operator at Approval checkpoint', 'Staff Operator')}
                   >
-                    Cancel Request
+                    ✕ Cancel Request
                   </button>
-                </div>
-              </>
-            )}
+                </>
+              )}
 
-            {caseItem.status === STATUSES.RESOLVED_CONFIRMED && (
-              <>
-                <div className="action-box-header">
-                  <div className="action-box-title" style={{ color: 'var(--emerald-500)' }}>
-                    <span>Stage 4 Booking Execution — Resolved & Confirmed</span>
-                  </div>
-                  <span className="tab-badge" style={{ color: 'var(--emerald-500)', borderColor: 'var(--emerald-border)' }}>
-                    Ref: {caseItem.bookingReference}
-                  </span>
-                </div>
-
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  Booking is executed. Seats are locked and decremented from show capacity. Confirmation correspondence dispatched to {caseItem.customerEmail}.
-                </p>
-
-                <div className="action-controls-row">
+              {isConfirmed && (
+                <>
                   <button 
-                    type="button" 
-                    className="btn-primary-action"
+                    type="button"
+                    className="btn-view-pass"
+                    style={{ background: '#E50914', color: '#fff', padding: '6px 12px', borderRadius: '4px', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                     onClick={() => setShowTicketModal(true)}
                   >
-                    <IconTicketStub size={16} />
-                    View & Print Ticket Voucher
+                    <IconTicketStub size={15} />
+                    View Ticket Pass
                   </button>
 
                   <button 
-                    type="button" 
+                    type="button"
                     className="btn-secondary-action"
-                    style={{ background: '#25D366', color: '#000', fontWeight: '700', borderColor: 'transparent' }}
+                    style={{ background: '#25D366', color: '#000', fontWeight: '700', borderColor: 'transparent', padding: '6px 12px', borderRadius: '4px' }}
                     onClick={() => setShowWhatsAppModal(true)}
                   >
-                    📲 WhatsApp Pass
+                    📱 WhatsApp
                   </button>
 
                   <button 
@@ -251,121 +233,96 @@ export function CaseDrawer({ caseItem, onClose }) {
                     className="btn-secondary-action"
                     onClick={() => setShowRescheduleModal(true)}
                   >
-                    🔄 Reschedule Showtime
+                    Reschedule Show
                   </button>
 
                   <button 
                     type="button" 
-                    className="btn-cancel-action"
-                    onClick={() => {
-                      if (window.confirm(`Issue cancellation & process refund for ${caseItem.customerName}? Seats will be restored to inventory.`)) {
-                        processRefund(caseItem.caseId, 'Ops agent processed customer refund', 'Staff Ops Agent');
-                      }
-                    }}
+                    className="btn-secondary-action"
+                    style={{ color: '#F87171', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                    onClick={handleProcessRefundClick}
                   >
-                    Issue Refund
+                    Cancel with Refund
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Custom Refund Reason Box */}
+            {showRefundInput && isConfirmed && (
+              <div style={{ marginTop: '12px', padding: '12px', background: 'var(--bg-card)', borderRadius: '6px', border: '1px solid var(--border-default)' }}>
+                <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff', marginBottom: '6px' }}>
+                  Refund Preview: {formatINR(refundCalc?.refundAmount || 0)} ({refundCalc?.policyTierLabel})
+                </div>
+                <input 
+                  type="text" 
+                  placeholder="Optional custom refund note..."
+                  className="search-input"
+                  style={{ width: '100%', marginBottom: '8px' }}
+                  value={customRefundReason}
+                  onChange={e => setCustomRefundReason(e.target.value)}
+                />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="button" className="btn-primary-action" style={{ background: '#EF4444', borderColor: '#EF4444' }} onClick={handleProcessRefundClick}>
+                    Authorize & Disconnect Seats
+                  </button>
+                  <button type="button" className="btn-secondary-action" onClick={() => setShowRefundInput(false)}>
+                    Cancel
                   </button>
                 </div>
-              </>
+              </div>
             )}
+          </div>
 
-            {caseItem.status === STATUSES.RESOLVED_REFUNDED && (
-              <>
-                <div className="action-box-header">
-                  <div className="action-box-title" style={{ color: 'var(--amber-500)' }}>
-                    <span>Resolved-Refunded</span>
-                  </div>
-                  <span className="tab-badge" style={{ color: 'var(--amber-500)' }}>
-                    Refund: {formatINR(caseItem.refundAmount || caseItem.totalCost)}
-                  </span>
+          {/* 4. Guest Contact Strip */}
+          <div className="drawer-section-card">
+            <div className="section-title-mini">Guest Contact Information</div>
+            <div className="details-key-val-grid">
+              <div><span className="text-muted">Full Name:</span> <strong>{caseItem.customerName}</strong></div>
+              <div><span className="text-muted">Email:</span> <strong>{caseItem.customerEmail}</strong></div>
+              <div><span className="text-muted">Phone:</span> <strong>{caseItem.customerPhone}</strong></div>
+              <div><span className="text-muted">Payment:</span> <strong>{caseItem.paymentMethod} ({caseItem.paymentTxnId})</strong></div>
+            </div>
+          </div>
+
+          {/* 5. Feature & Theatre Booking Object */}
+          <div className="drawer-section-card">
+            <div className="section-title-mini">Feature & Screening Auditorium</div>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+              {movie?.posterUrl && (
+                <img src={movie.posterUrl} alt={movie.title} style={{ width: '56px', height: '80px', objectFit: 'cover', borderRadius: '4px' }} />
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: '700', color: '#fff', fontSize: '15px' }}>{movie?.title}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{movie?.genre} • {movie?.certificate}</div>
+                <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-primary)' }}>
+                  <strong>{show?.theatre}</strong> ({show?.city}, {show?.state})
                 </div>
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  This booking was cancelled and refunded. Seats have been returned to show capacity.
-                </p>
-              </>
-            )}
-
-            {caseItem.status === STATUSES.RESOLVED_CANCELLED && (
-              <>
-                <div className="action-box-header">
-                  <div className="action-box-title" style={{ color: 'var(--text-muted)' }}>
-                    <span>Case Lifecycle Terminated — Resolved-Cancelled</span>
-                  </div>
+                <div style={{ fontSize: '12px', color: 'var(--amber-400)', fontWeight: '600' }}>
+                  {show?.screen} ({show?.format}) • {show?.date} at {show?.time}
                 </div>
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  This booking request was cancelled. No seats were decremented.
-                </p>
-              </>
-            )}
-          </div>
-
-          {/* 4. Customer Info Strip */}
-          <div className="drawer-section">
-            <div className="section-mini-title">Guest Contact & Payment Details</div>
-            <div className="guest-info-grid">
-              <div>
-                <span className="label-dim">Full Name</span>
-                <div className="val-bold">{caseItem.customerName}</div>
-              </div>
-              <div>
-                <span className="label-dim">Email</span>
-                <div className="val-bold font-mono">{caseItem.customerEmail}</div>
-              </div>
-              <div>
-                <span className="label-dim">Payment Mode</span>
-                <div className="val-bold">{caseItem.paymentMethod || 'UPI Instant'}</div>
               </div>
             </div>
           </div>
 
-          {/* 5. Referenced Entities */}
-          <div className="entities-grid">
-            <div className="entity-card">
-              <div className="entity-card-header">
-                <span>Referenced Movie</span>
-                <span className="movie-card-badge">{movie?.certificate}</span>
-              </div>
-              <div className="entity-name">{movie?.title}</div>
-              <div className="entity-meta-list">
-                <div><strong>Genre:</strong> {movie?.genre}</div>
-                <div><strong>Runtime:</strong> {movie?.durationMinutes} mins • ★ {movie?.ratingScore}</div>
-              </div>
-            </div>
-
-            <div className="entity-card">
-              <div className="entity-card-header">
-                <span>Referenced Show ({show?.id})</span>
-                <span className={`queue-badge ${show?.showType === 'Premium' ? 'queue-premium' : 'queue-standard'}`}>
-                  {show?.showType}
-                </span>
-              </div>
-              <div className="entity-name">{show?.theatre}</div>
-              <div className="entity-meta-list">
-                <div><strong>Location:</strong> {show?.city}, {show?.state}</div>
-                <div><strong>Screen:</strong> {show?.screen} ({show?.format || '2D'})</div>
-                <div><strong>Showtime:</strong> {show?.date} at {show?.time}</div>
-                <div><strong>Capacity:</strong> {show?.seatsRemaining} / {show?.totalCapacity} seats remaining</div>
-              </div>
-            </div>
-          </div>
-
-          {/* 6. Live Cost Calculation Breakdown in INR */}
+          {/* 6. Pricing & Cost Breakdown */}
           <div className="cost-breakdown-card">
-            <div className="section-mini-title">Calculated Total Cost Breakdown (INR)</div>
-            <div className="cost-row">
-              <span>Show Base Rate:</span>
-              <span className="cost-val">{formatINR(show?.basePrice || 250, false)}</span>
+            <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: '700' }}>
+              Calculated Cost Breakdown
             </div>
+
             <div className="cost-row">
-              <span>Seat Tier: {categoryConfig.label} ({categoryConfig.multiplier}x):</span>
-              <span className="cost-val">{formatINR(Math.round((show?.basePrice || 250) * categoryConfig.multiplier), false)} / seat</span>
+              <span>Seats Selected ({caseItem.seatCount}x):</span>
+              <span className="cost-val">{caseItem.selectedSeats?.join(', ')} ({categoryConfig.label})</span>
             </div>
+
             <div className="cost-row">
-              <span>Seat Quantity ({caseItem.seatCount} seats: {caseItem.selectedSeats?.join(', ')}):</span>
-              <span className="cost-val">{formatINR(Math.round((show?.basePrice || 250) * categoryConfig.multiplier) * caseItem.seatCount)}</span>
+              <span>Tickets Base Rate:</span>
+              <span className="cost-val">{formatINR(((show?.basePrice || 250) * categoryConfig.multiplier) * caseItem.seatCount)}</span>
             </div>
+
             <div className="cost-row">
-              <span>Convenience Fee & GST (18%):</span>
+              <span>Convenience Fee & GST:</span>
               <span className="cost-val">{formatINR(35.40 * caseItem.seatCount)}</span>
             </div>
 
@@ -460,9 +417,11 @@ export function CaseDrawer({ caseItem, onClose }) {
                 Select an alternate scheduled screening for <strong>{movie?.title}</strong> in {show?.city}:
               </p>
 
-              <div className="form-group">
+              <div className="form-group" style={{ marginTop: '10px' }}>
                 <label className="form-label">Available Alternate Screenings</label>
                 <select 
+                  className="filter-select"
+                  style={{ width: '100%' }}
                   value={rescheduleShowId} 
                   onChange={e => setRescheduleShowId(e.target.value)}
                 >
@@ -475,7 +434,7 @@ export function CaseDrawer({ caseItem, onClose }) {
                 </select>
               </div>
             </div>
-            <div className="modal-footer">
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button type="button" className="btn-secondary-action" onClick={() => setShowRescheduleModal(false)}>Cancel</button>
               <button 
                 type="button" 
@@ -517,7 +476,8 @@ export function CaseDrawer({ caseItem, onClose }) {
                 fontFamily: 'var(--font-mono)',
                 whiteSpace: 'pre-wrap',
                 lineHeight: 1.4,
-                border: '1px solid var(--border-default)'
+                border: '1px solid var(--border-default)',
+                marginTop: '10px'
               }}>
                 {selectedCorrModal.body}
               </pre>
