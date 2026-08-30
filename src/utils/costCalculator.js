@@ -1,7 +1,7 @@
 import { SEAT_CATEGORIES, FOOD_BEVERAGE_MENU } from '../data/types';
 
 /**
- * Formats a number in standard Indian Rupee notation (e.g. ₹1,250.00 or ₹250)
+ * Formats a number in standard Indian Rupee notation (e.g. ₹1,250.00 or ₹1250)
  */
 export function formatINR(amount, includeDecimals = true) {
   if (isNaN(amount) || amount === null || amount === undefined) return '₹0';
@@ -94,34 +94,44 @@ export function calculateTotalCost(show, seatCount = 1, seatCategoryKey = 'STAND
 }
 
 /**
- * Calculates Indian Multiplex Cancellation Refund Amount
+ * Calculates Indian Multiplex Cancellation Refund Amount based on hours remaining until showtime
  * Rules:
- *  - > 24 hours before showtime: 100% ticket refund (minus small ₹50 processing fee)
+ *  - >= 24 hours before showtime: 100% ticket refund (minus nominal ₹50 processing fee)
  *  - 4 to 24 hours before showtime: 75% refund (25% cancellation charge)
- *  - < 4 hours before showtime: 50% refund
+ *  - < 4 hours before showtime: 50% refund (50% cancellation charge)
  */
 export function calculateRefundAmount(totalCost, hoursRemaining = 24) {
+  const cost = Number(totalCost) || 0;
+  const hours = typeof hoursRemaining === 'number' && !isNaN(hoursRemaining) ? hoursRemaining : 24;
+
   let refundPercentage = 100;
   let cancellationFee = 0;
+  let policyTierLabel = 'Full Refund (>24h before show)';
 
-  if (hoursRemaining >= 24) {
+  if (hours >= 24) {
     refundPercentage = 100;
-    cancellationFee = 50; // Flat ₹50 nominal processing fee
-  } else if (hoursRemaining >= 4) {
+    cancellationFee = Math.min(50, cost); // Flat ₹50 nominal processing fee
+    policyTierLabel = 'Full Refund (>24h)';
+  } else if (hours >= 4) {
     refundPercentage = 75;
-    cancellationFee = Number((totalCost * 0.25).toFixed(2));
+    cancellationFee = Number((cost * 0.25).toFixed(2));
+    policyTierLabel = 'Partial Refund (4h–24h)';
   } else {
     refundPercentage = 50;
-    cancellationFee = Number((totalCost * 0.50).toFixed(2));
+    cancellationFee = Number((cost * 0.50).toFixed(2));
+    policyTierLabel = 'Late Cancellation (<4h)';
   }
 
-  const refundAmount = Math.max(0, Number((totalCost - cancellationFee).toFixed(2)));
+  const refundAmount = Math.max(0, Number((cost - cancellationFee).toFixed(2)));
 
   return {
     refundPercentage,
     cancellationFee,
+    deductionAmount: cancellationFee,
     refundAmount,
+    policyTierLabel,
     formattedCancellationFee: formatINR(cancellationFee),
+    formattedDeductionAmount: formatINR(cancellationFee),
     formattedRefundAmount: formatINR(refundAmount),
   };
 }

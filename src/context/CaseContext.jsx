@@ -409,12 +409,20 @@ export function CaseProvider({ children }) {
   /**
    * Process Refund
    */
-  const processRefund = (caseId, actor = 'Staff Finance Agent', customReason = '') => {
+    const processRefund = (caseId, actor = 'Staff Finance Agent', customReason = '') => {
     const targetCase = cases.find(c => c.caseId === caseId);
     if (!targetCase) return { success: false, message: 'Case not found' };
 
     const show = shows.find(s => s.id === targetCase.showId);
-    const refundDetails = calculateRefundAmount(targetCase.totalCost, show?.date, show?.time);
+    let hoursRemaining = 24;
+    if (show && show.date && show.time) {
+      const showDateTime = new Date(`${show.date}T${show.time}`);
+      if (!isNaN(showDateTime.getTime())) {
+        hoursRemaining = Math.max(0, (showDateTime.getTime() - simulatedNow) / (1000 * 60 * 60));
+      }
+    }
+
+    const refundDetails = calculateRefundAmount(targetCase.totalCost, hoursRemaining);
     const nowIso = new Date(simulatedNow).toISOString();
 
     // Release seats back to show inventory if confirmed
@@ -430,9 +438,10 @@ export function CaseProvider({ children }) {
       }));
     }
 
+    const feeAmount = refundDetails.deductionAmount ?? refundDetails.cancellationFee;
     const refundNotes = customReason 
       ? `Refund processed (${refundDetails.policyTierLabel}): ₹${refundDetails.refundAmount.toFixed(2)} refunded. Reason: ${customReason}.`
-      : `Refund processed (${refundDetails.policyTierLabel}): ₹${refundDetails.refundAmount.toFixed(2)} refunded (85% refund, 15% cancellation fee ₹${refundDetails.deductionAmount.toFixed(2)}).`;
+      : `Refund processed (${refundDetails.policyTierLabel}): ₹${refundDetails.refundAmount.toFixed(2)} refunded (${refundDetails.refundPercentage}% refund, cancellation fee ₹${feeAmount.toFixed(2)}).`;
 
     const updatedHistory = [
       ...targetCase.stageHistory,
@@ -451,9 +460,11 @@ export function CaseProvider({ children }) {
       resolvedAt: nowIso,
       refundDetails: {
         amount: refundDetails.refundAmount,
-        deduction: refundDetails.deductionAmount,
+        deduction: feeAmount,
+        percentage: refundDetails.refundPercentage,
+        policyTierLabel: refundDetails.policyTierLabel,
         processedAt: nowIso,
-        reason: customReason || 'Customer requested cancellation with refund',
+        reason: customReason || `${refundDetails.policyTierLabel} - Customer cancellation`,
       },
       stageHistory: updatedHistory,
     };
@@ -465,7 +476,7 @@ export function CaseProvider({ children }) {
   /**
    * Reschedule Booking to Alternate Show
    */
-  const rescheduleBooking = (caseId, newShowId, actor = 'Staff Ops Agent') => {
+const rescheduleBooking = (caseId, newShowId, actor = 'Staff Ops Agent') => {
     const targetCase = cases.find(c => c.caseId === caseId);
     const newShow = shows.find(s => s.id === newShowId);
     const oldShow = shows.find(s => s.id === targetCase?.showId);

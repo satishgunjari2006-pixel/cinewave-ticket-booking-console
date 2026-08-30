@@ -52,7 +52,11 @@ export function CaseDrawer({ caseItem, onClose }) {
     s => s.movieId === show?.movieId && s.city === show?.city && s.id !== show?.id && s.seatsRemaining >= caseItem.seatCount
   );
 
-  const refundCalc = show ? calculateRefundAmount(caseItem.totalCost, show.date, show.time) : null;
+  const showDateTime = show && show.date && show.time ? new Date(`${show.date}T${show.time}`) : null;
+  const hoursRemaining = showDateTime && !isNaN(showDateTime.getTime()) 
+    ? Math.max(0, (showDateTime.getTime() - simulatedNow) / (1000 * 60 * 60)) 
+    : 24;
+  const refundCalc = show ? calculateRefundAmount(caseItem.totalCost, hoursRemaining) : null;
 
   const handleOpenCustomerView = () => {
     setCustomerActiveCaseId(caseItem.caseId);
