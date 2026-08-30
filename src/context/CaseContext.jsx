@@ -333,13 +333,12 @@ export function CaseProvider({ children }) {
     }));
 
     // 2. Generate simulated email confirmation correspondence
-    const correspondence = createConfirmationCorrespondence({
-      caseItem: targetCase,
-      show,
-      movie,
-      ticketRef,
+    const caseWithTicketRef = {
+      ...targetCase,
+      bookingReference: ticketRef,
       confirmedAt: nowIso,
-    });
+    };
+    const correspondence = createConfirmationCorrespondence(caseWithTicketRef, show, movie);
 
     // 3. Stage 3 (Approval) -> Stage 4 (Booking Execution)
     const updatedHistory = [
