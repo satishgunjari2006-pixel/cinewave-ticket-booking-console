@@ -15,7 +15,7 @@ export function PaymentModal({ totalCost, customerName, onPaymentSuccess, onClos
       const txnId = `CW-TXN-${Math.floor(100000 + Math.random() * 900000)}`;
       setProcessing(false);
       onPaymentSuccess(txnId, paymentMethod);
-    }, 1200);
+    }, 250);
   };
 
   return (

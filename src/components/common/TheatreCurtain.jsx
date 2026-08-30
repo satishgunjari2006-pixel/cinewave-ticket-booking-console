@@ -5,10 +5,10 @@ export function TheatreCurtain({ isAnimating }) {
   const [initialOpening, setInitialOpening] = useState(true);
 
   useEffect(() => {
-    // Curtains hold closed for 350ms, then grandly glide open over 1650ms (2.0s total)
+    // Ultra-fast opening reveal on initial load
     const timer = setTimeout(() => {
       setInitialOpening(false);
-    }, 2050);
+    }, 380);
     return () => clearTimeout(timer);
   }, []);
 
