@@ -151,7 +151,7 @@ export function CaseProvider({ children }) {
   }, []);
 
   /**
-   * Theatre Curtain Home Transition Trigger (Smooth 0.9s duration)
+   * Theatre Curtain Home Transition Trigger (1.0s duration)
    * Always navigates back to the home discovery catalog step 1
    */
   const triggerHomeCurtainTransition = () => {
@@ -163,10 +163,10 @@ export function CaseProvider({ children }) {
     setHomeResetCount(prev => prev + 1);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // End animation after 900ms
+    // End animation after 1000ms
     setTimeout(() => {
       setIsCurtainAnimating(false);
-    }, 900);
+    }, 1000);
   };
 
   const setLocation = (stateName, cityName) => {

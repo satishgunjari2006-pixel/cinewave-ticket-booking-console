@@ -193,13 +193,13 @@ input:focus, select:focus {
 
 .curtain-left.curtain-cycle-mode {
   left: 0;
-  animation: curtain-cycle-left-anim 0.9s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  animation: curtain-cycle-left-anim 1s cubic-bezier(0.65, 0, 0.35, 1) forwards;
   border-right: 2px solid rgba(245, 158, 11, 0.4);
 }
 
 .curtain-right.curtain-cycle-mode {
   right: 0;
-  animation: curtain-cycle-right-anim 0.9s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  animation: curtain-cycle-right-anim 1s cubic-bezier(0.65, 0, 0.35, 1) forwards;
   border-left: 2px solid rgba(245, 158, 11, 0.4);
 }
 
