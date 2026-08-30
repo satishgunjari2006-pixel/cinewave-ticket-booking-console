@@ -1,68 +1,71 @@
-﻿# CineWave Ticket Booking Console 🎬🎟️
+# CineWave — Movie Ticket Booking & Operations Console 🎬🎟️
 
-A comprehensive, full-stack style Cinema Ticket Booking & Operations Management System built with **React**, **Vite**, and **Pega Case Management Architecture**.
+A cinema ticketing and operational case-management system built with **React**
+and **Vite**, modeled on a **Pega Platform** case-management exercise for
+CineWave Entertainment. Rather than a typical e-commerce ticketing UI, this
+implements the actual case-management concepts Pega uses — stages, SLAs,
+calculated properties, and automated queue routing — as a working web
+prototype.
+
+> Built as a learning/portfolio project — not affiliated with or endorsed by Pegasystems Inc.
+
+---
+
+## 🌐 Live Demo
+
+**[satishgunjari2006-pixel.github.io/cinewave-ticket-booking-console](https://satishgunjari2006-pixel.github.io/cinewave-ticket-booking-console/)**
+
+---
+
+## 🎯 Case Type: Movie Ticket Request
+
+**Lifecycle stages:** `Initial Stage` ➔ `Availability` ➔ `Approval` ➔ `Booking Execution`
+
+| Stage | What happens |
+|---|---|
+| **Initial Stage** | Customer submits a booking request — movie, state/city/theatre, showtime, seats. |
+| **Availability** | Seat availability is checked against the show's remaining capacity; Total Cost is calculated live (in ₹). |
+| **Approval** | An explicit confirm/cancel checkpoint — the customer reviews seats and total cost before the booking is finalized. Requests route automatically to **Premium ShowQueue** or **Standard ShowQueue** based on show format. |
+| **Booking Execution** | Seats are locked, a ticket reference and QR code are generated, and a confirmation notification is logged. |
 
 ---
 
 ## 🌟 Key Features
 
-### 1. 🎟️ Customer Booking Portal
-- **Interactive Movie Browsing**: Explore currently showing movies, trailers, and ratings.
-- **Dynamic Showtime & Theatre Selection**: Choose date, screen format (IMAX, 4DX, Dolby Atmos), and timings.
-- **Visual Seating Matrix**: Multi-tier seat selection (Standard, Prime, VIP Recliners) with real-time seat locking.
-- **Concessions & Add-ons**: Add popcorn, beverages, gourmet snacks, and parking passes.
-- **Instant Digital Ticket & QR Code**: Complete checkout with confetti animations and WhatsApp ticket receipt preview.
+### 🎟️ Customer Booking Portal
+- Interactive movie browsing with trailers, ratings, and runtime.
+- State → City → Theatre selection, then showtime and screen format (IMAX, 4DX, Dolby Atmos).
+- Visual seating matrix (Standard / Prime / VIP Recliner) with real-time seat locking.
+- Concessions & add-ons — popcorn, beverages, snacks, parking passes.
+- Explicit approval checkpoint before final booking, separate from checkout.
+- Digital ticket with QR code on confirmation.
+- All pricing in ₹ (INR).
 
-### 2. ⚙️ Pega Operations & Case Management
-- **Case Lifecycle Stages**: Track tickets through `Draft` ➔ `Payment Pending` ➔ `Confirmed` ➔ `Fulfilled` / `Escalated`.
-- **SLA Engine**: Real-time Goal, Deadline, and Passed-Deadline tracking with SLA badges.
-- **Audit Trails**: Full chronological history of case events, approvals, and operator notes.
-- **Time Travel Simulator**: Accelerate case timers to test SLA breaches and automated escalation triggers.
+### ⚙️ Pega-Style Operations & Case Management
+- Full case lifecycle tracking with a stage stepper per booking.
+- Automated **queue routing** — Premium ShowQueue vs. Standard ShowQueue by show type.
+- **SLA engine** — Goal (1 day) / Deadline (2 days) tracking with urgency badges and breach simulation.
+- Audit trail — chronological history of case events, approvals, and operator actions.
+- Staff **Movie & Show data management** — add/edit movies, screens, and showtimes.
 
-### 3. 📊 Analytics & Insights Dashboard
-- **Occupancy & Capacity Metrics**: Live utilization stats per screen and showtime.
-- **Revenue Analytics**: Visual breakdowns across movie tickets, food & beverages, and convenience fees.
-- **Cancellation & SLA Compliance**: Monitor refund rates and operator response times.
-
-### 4. 🎬 Show & Screen Inventory Manager
-- Manage screens, seat layouts, ticket price tiers, and show schedules.
+### 📊 Analytics & Insights Dashboard
+- Occupancy and capacity metrics per screen and showtime.
+- Revenue breakdown across tickets, add-ons, and convenience fees.
+- SLA compliance and cancellation tracking.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 19, Vite, Vanilla CSS Design System
-- **Icons**: Lucide React
-- **Animations**: Canvas Confetti & CSS3 Transitions
-- **Workflow / Case Engine**: Pega PRPC Inspired Case & SLA Architecture
+- **Frontend:** React 19, Vite, Vanilla CSS Design System
+- **Icons:** Lucide React
+- **Workflow / Case Engine:** Pega PRPC–inspired case & SLA architecture
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Running Locally (optional)
+
+Only needed if you want to run or modify the project yourself — the live
+demo above requires no setup.
 
 ### 1. Clone the repository
-```bash
-git clone https://github.com/satishgunjari2006-pixel/cinewave-ticket-booking-console.git
-cd cinewave-ticket-booking-console
-```
-
-### 2. Install dependencies
-```bash
-npm install
-```
-
-### 3. Start local development server
-```bash
-npm run dev
-```
-Open [http://localhost:5173](http://localhost:5173) in your browser.
-
-### 4. Build for production
-```bash
-npm run build
-```
-
----
-
-## 📄 License
-MIT License
