@@ -21,28 +21,65 @@ import { calculateSLA, SLA_STATES } from '../utils/slaCalculator';
 
 const CaseContext = createContext();
 
-const STORAGE_KEY_MOVIES = 'cinewave_movies_v5';
-const STORAGE_KEY_SHOWS = 'cinewave_shows_v5';
-const STORAGE_KEY_CASES = 'cinewave_cases_v5';
-const STORAGE_KEY_OFFSET = 'cinewave_time_offset_v5';
-const STORAGE_KEY_CITY = 'cinewave_city_v5';
-const STORAGE_KEY_STATE = 'cinewave_state_v5';
+export const sanitizeEncoding = (val) => {
+  if (typeof val === 'string') {
+    return val
+      .replace(/â€¢/g, '•')
+      .replace(/â€”/g, '—')
+      .replace(/â€™/g, "'")
+      .replace(/â‚¹/g, '₹')
+      .replace(/\u00E2\u20AC\u00A2/g, '•')
+      .replace(/\u00E2\u20AC\u201D/g, '—')
+      .replace(/\u00E2\u20AC\u2122/g, "'")
+      .replace(/\u00E2\u201A\u00B9/g, '₹');
+  }
+  if (Array.isArray(val)) {
+    return val.map(sanitizeEncoding);
+  }
+  if (val && typeof val === 'object') {
+    const res = {};
+    for (const k of Object.keys(val)) {
+      res[k] = sanitizeEncoding(val[k]);
+    }
+    return res;
+  }
+  return val;
+};
+
+const STORAGE_KEY_MOVIES = 'cinewave_movies_v10';
+const STORAGE_KEY_SHOWS = 'cinewave_shows_v10';
+const STORAGE_KEY_CASES = 'cinewave_cases_v10';
+const STORAGE_KEY_OFFSET = 'cinewave_time_offset_v10';
+const STORAGE_KEY_CITY = 'cinewave_city_v10';
+const STORAGE_KEY_STATE = 'cinewave_state_v10';
 
 export function CaseProvider({ children }) {
   // 1. Core State
   const [movies, setMovies] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_MOVIES);
-    return saved ? JSON.parse(saved) : INITIAL_MOVIES;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_MOVIES);
+      return sanitizeEncoding(saved ? JSON.parse(saved) : INITIAL_MOVIES);
+    } catch {
+      return sanitizeEncoding(INITIAL_MOVIES);
+    }
   });
 
   const [shows, setShows] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_SHOWS);
-    return saved ? JSON.parse(saved) : INITIAL_SHOWS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_SHOWS);
+      return sanitizeEncoding(saved ? JSON.parse(saved) : INITIAL_SHOWS);
+    } catch {
+      return sanitizeEncoding(INITIAL_SHOWS);
+    }
   });
 
   const [cases, setCases] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_CASES);
-    return saved ? JSON.parse(saved) : INITIAL_CASES;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_CASES);
+      return sanitizeEncoding(saved ? JSON.parse(saved) : INITIAL_CASES);
+    } catch {
+      return sanitizeEncoding(INITIAL_CASES);
+    }
   });
 
   // Selected Location (Default: Hyderabad, Telangana)
@@ -670,9 +707,9 @@ const rescheduleBooking = (caseId, newShowId, actor = 'Staff Ops Agent') => {
   };
 
   const resetData = () => {
-    setMovies(INITIAL_MOVIES);
-    setShows(INITIAL_SHOWS);
-    setCases(INITIAL_CASES);
+    setMovies(sanitizeEncoding(INITIAL_MOVIES));
+    setShows(sanitizeEncoding(INITIAL_SHOWS));
+    setCases(sanitizeEncoding(INITIAL_CASES));
     setTimeOffsetMinutes(0);
     setSelectedState('Telangana');
     setSelectedCity('Hyderabad');
