@@ -120,7 +120,7 @@ export function ApprovalCheckpoint({ defaultCaseId }) {
 
           {/* 4-Stage Lifecycle Stepper Tracker */}
           <div className="stage-tracker-wrapper" style={{ margin: '14px 0 20px 0' }}>
-            <div className="stage-tracker-title">Pega Case Lifecycle Progress</div>
+            <div className="stage-tracker-title">Booking Progress</div>
             <div className="stage-steps-row">
               {[
                 { idx: 0, name: STAGES.INITIAL, label: 'Stage 1: Initial Stage', desc: 'Case intake & queue routing' },
@@ -299,7 +299,7 @@ export function ApprovalCheckpoint({ defaultCaseId }) {
 
           {/* Audit Timeline */}
           <div className="checkpoint-timeline">
-            <div className="section-mini-title">Pega Case Audit & Event Trail</div>
+            <div className="section-mini-title">Booking Activity Log</div>
             <div className="timeline-list">
               {activeCase.stageHistory?.map((ev, idx) => (
                 <div key={idx} className="timeline-event">
