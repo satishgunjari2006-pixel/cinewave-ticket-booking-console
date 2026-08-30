@@ -193,53 +193,53 @@ input:focus, select:focus {
 
 .curtain-left.curtain-cycle-mode {
   left: 0;
-  animation: curtain-cycle-left-anim 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: curtain-cycle-left-anim 0.9s cubic-bezier(0.65, 0, 0.35, 1) forwards;
   border-right: 2px solid rgba(245, 158, 11, 0.4);
 }
 
 .curtain-right.curtain-cycle-mode {
   right: 0;
-  animation: curtain-cycle-right-anim 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: curtain-cycle-right-anim 0.9s cubic-bezier(0.65, 0, 0.35, 1) forwards;
   border-left: 2px solid rgba(245, 158, 11, 0.4);
 }
 
 .curtain-left.curtain-opening-mode {
   left: 0;
-  animation: curtain-opening-left-anim 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: curtain-opening-left-anim 1.2s cubic-bezier(0.45, 0, 0.25, 1) forwards;
   border-right: 2px solid rgba(245, 158, 11, 0.4);
 }
 
 .curtain-right.curtain-opening-mode {
   right: 0;
-  animation: curtain-opening-right-anim 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: curtain-opening-right-anim 1.2s cubic-bezier(0.45, 0, 0.25, 1) forwards;
   border-left: 2px solid rgba(245, 158, 11, 0.4);
 }
 
-/* Cycle Animation */
+/* Cycle Animation (Logo Click: Closes gracefully from sides -> Holds briefly in center -> Parts open) */
 @keyframes curtain-cycle-left-anim {
   0% { transform: translateX(-100%); }
-  45% { transform: translateX(0%); }
-  55% { transform: translateX(0%); }
+  42% { transform: translateX(0%); }
+  58% { transform: translateX(0%); }
   100% { transform: translateX(-100%); }
 }
 
 @keyframes curtain-cycle-right-anim {
   0% { transform: translateX(100%); }
-  45% { transform: translateX(0%); }
-  55% { transform: translateX(0%); }
+  42% { transform: translateX(0%); }
+  58% { transform: translateX(0%); }
   100% { transform: translateX(100%); }
 }
 
-/* Fast Initial Load Reveal */
+/* Smooth Initial Load Reveal (Starts closed in center -> Holds 150ms -> Grandly glides open) */
 @keyframes curtain-opening-left-anim {
   0% { transform: translateX(0%); }
-  10% { transform: translateX(0%); }
+  15% { transform: translateX(0%); }
   100% { transform: translateX(-100%); }
 }
 
 @keyframes curtain-opening-right-anim {
   0% { transform: translateX(0%); }
-  10% { transform: translateX(0%); }
+  15% { transform: translateX(0%); }
   100% { transform: translateX(100%); }
 }
 

@@ -5,10 +5,10 @@ export function TheatreCurtain({ isAnimating }) {
   const [initialOpening, setInitialOpening] = useState(true);
 
   useEffect(() => {
-    // Ultra-fast opening reveal on initial load
+    // Smooth, cinematic opening reveal on initial load
     const timer = setTimeout(() => {
       setInitialOpening(false);
-    }, 380);
+    }, 1250);
     return () => clearTimeout(timer);
   }, []);
 
